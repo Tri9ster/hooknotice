@@ -1,0 +1,14 @@
+{
+  "name": "hooknotice",
+  "owner": {
+    "name": "Tri9ster"
+  },
+  "description": "Marketplace for hooknotice, desktop notifications for Claude Code.",
+  "plugins": [
+    {
+      "name": "hooknotice",
+      "source": "./plugins/hooknotice",
+      "description": "Desktop notification windows for Claude Code (macOS). Answer permission requests, questions, and plan approvals from the notification when you are away from the terminal."
+    }
+  ]
+}

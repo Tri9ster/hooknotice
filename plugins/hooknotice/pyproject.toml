@@ -1,0 +1,12 @@
+[project]
+name = "hooknotice"
+version = "0.1.0"
+description = "Claude Code 用デスクトップ通知（PySide6製 通知ウィンドウ）"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "PySide6-Essentials>=6.7",
+]
+
+[tool.uv]
+package = false

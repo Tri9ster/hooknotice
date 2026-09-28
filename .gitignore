@@ -1,0 +1,14 @@
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+
+# 利用者ごとの設定（無くても既定値で動く）
+config.json
+
+# OS が作るファイル
+.DS_Store
+Thumbs.db
+
+# 手元専用の作業フォルダ（公開しない）
+TEMP/

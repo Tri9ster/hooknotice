@@ -1,0 +1,17 @@
+{
+  "name": "hooknotice",
+  "version": "0.1.0",
+  "description": "Desktop notification windows for Claude Code (macOS). Answer permission requests, questions, and plan approvals from the notification when you are away from the terminal.",
+  "author": {
+    "name": "Tri9ster"
+  },
+  "homepage": "https://github.com/Tri9ster/hooknotice",
+  "repository": "https://github.com/Tri9ster/hooknotice",
+  "license": "MIT",
+  "keywords": [
+    "notification",
+    "hooks",
+    "macos",
+    "permission"
+  ]
+}
