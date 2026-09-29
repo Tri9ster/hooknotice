@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-09-30: `@claude` の実行者の制限と、Actions の依存を uv とキャッシュで入れる
+
+### 目的
+- `.github/workflows/claude.yml` を、リポジトリの持ち主以外のコメントや Issue では起動しないようにする。
+- Actions は毎回まっさらな VM で動くため、`@claude` のたびに apt・PySide6・claude CLI を入れ直している。
+  これは Actions では普通のやり方だが、`pip install PySide6` は本番（`PySide6-Essentials`＋`uv.lock`）とずれていて、キャッシュも無かった。
+
+### 決めたこと
+- `if:` を `github.actor == 'Tri9ster' && ( …従来の4条件… )` にした。
+- PySide6 は `astral-sh/setup-uv@v6`（`enable-cache`、キーは `plugins/hooknotice/uv.lock`）＋ `uv sync --frozen` で入れ、
+  `plugins/hooknotice/.venv/bin` を `GITHUB_PATH` に足して、Claude が使う `python3` を venv にした。allowedTools に `Bash(uv:*)` を追加。
+- uv が作る venv には pip が入らず、Claude の `pip install` が setup-python 側に入ってしまうため、`uv sync` の後に
+  `uv pip install pip` で venv にも pip を入れた（`PATH` の先頭が venv なので `pip` も venv のものになる）。
+- apt（Qt の offscreen に要る共有ライブラリ）と `npm install -g @anthropic-ai/claude-code`（`claude plugin validate` 用）は、
+  数十秒で済むのでキャッシュせずそのまま。
+
+### 分かったこと
+- 手元では YAML の構文だけ確認した。キャッシュの効き方と、持ち主以外のコメントで skip されることは、push 後に Actions で確かめる。
+
+---
+
 ## 2026-09-29: 解説のモデル・effort の設定化と、docs 更新ルールの追加（Issue #3）
 
 ### 目的
