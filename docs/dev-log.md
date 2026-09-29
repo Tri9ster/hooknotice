@@ -15,6 +15,8 @@
 - `if:` を `github.actor == 'Tri9ster' && ( …従来の4条件… )` にした。
 - PySide6 は `astral-sh/setup-uv@v6`（`enable-cache`、キーは `plugins/hooknotice/uv.lock`）＋ `uv sync --frozen` で入れ、
   `plugins/hooknotice/.venv/bin` を `GITHUB_PATH` に足して、Claude が使う `python3` を venv にした。allowedTools に `Bash(uv:*)` を追加。
+- uv が作る venv には pip が入らず、Claude の `pip install` が setup-python 側に入ってしまうため、`uv sync` の後に
+  `uv pip install pip` で venv にも pip を入れた（`PATH` の先頭が venv なので `pip` も venv のものになる）。
 - apt（Qt の offscreen に要る共有ライブラリ）と `npm install -g @anthropic-ai/claude-code`（`claude plugin validate` 用）は、
   数十秒で済むのでキャッシュせずそのまま。
 

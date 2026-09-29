@@ -50,6 +50,7 @@ jobs:
         working-directory: plugins/hooknotice ##2026-09-30 追加 by claude
         run: | ##2026-09-30 追加 by claude
           uv sync --frozen --python "$(which python3)" ##2026-09-30 追加 by claude
+          uv pip install pip ##2026-09-30 追加 by claude: uv の venv には pip が無いので足す（Claude の pip install を venv に入れるため）
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH" ##2026-09-30 追加 by claude: 以降の python3 を venv にする
 
       - name: Install claude CLI ##2026-09-29 追加 by claude（2026-09-30 分割）
