@@ -12,11 +12,13 @@ on:
 
 jobs:
   claude:
-    if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    if: | ##2026-09-30 変更 by claude: リポジトリの持ち主だけが @claude を起動できる
+      github.actor == 'Tri9ster' && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,12 +36,24 @@ jobs:
         with: ##2026-09-29 追加 by claude
           python-version: '3.12' ##2026-09-29 追加 by claude
 
-      - name: Install PySide6 and claude CLI ##2026-09-29 追加 by claude
+      - uses: astral-sh/setup-uv@v6 ##2026-09-30 追加 by claude: uv.lock が変わるまでダウンロードをキャッシュする
+        with: ##2026-09-30 追加 by claude
+          enable-cache: true ##2026-09-30 追加 by claude
+          cache-dependency-glob: plugins/hooknotice/uv.lock ##2026-09-30 追加 by claude
+
+      - name: Install Qt system libraries ##2026-09-29 追加 by claude（2026-09-30 分割）
         run: | ##2026-09-29 追加 by claude
           sudo apt-get update ##2026-09-29 追加 by claude
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 ##2026-09-29 追加 by claude
-          pip install PySide6 ##2026-09-29 追加 by claude
-          npm install -g @anthropic-ai/claude-code ##2026-09-29 追加 by claude
+
+      - name: Install PySide6 from uv.lock ##2026-09-30 変更 by claude: pip install PySide6 → 本番と同じ uv.lock（PySide6-Essentials）
+        working-directory: plugins/hooknotice ##2026-09-30 追加 by claude
+        run: | ##2026-09-30 追加 by claude
+          uv sync --frozen --python "$(which python3)" ##2026-09-30 追加 by claude
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH" ##2026-09-30 追加 by claude: 以降の python3 を venv にする
+
+      - name: Install claude CLI ##2026-09-29 追加 by claude（2026-09-30 分割）
+        run: npm install -g @anthropic-ai/claude-code ##2026-09-29 追加 by claude
 
       - name: Run Claude Code
         id: claude
@@ -62,5 +76,5 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr *)'
           # claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3:*),Bash(git:*)"'
-          claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3 -m pytest:*),Bash(python3:*),Bash(pip:*),Bash(claude:*),Bash(git fetch:*)"' ##2026-09-29 追加 by claude
+          claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3 -m pytest:*),Bash(python3:*),Bash(pip:*),Bash(uv:*),Bash(claude:*),Bash(git fetch:*)"' ##2026-09-29 追加 by claude（2026-09-30 uv を追加）
 
