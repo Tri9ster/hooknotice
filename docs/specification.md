@@ -216,6 +216,7 @@ notify_window.py（PySide6・使い捨てプロセス）
 | キー | 既定 | 範囲 | 使う場所 |
 | --- | --- | --- | --- |
 | `language` | `auto` | `auto` / `ja` / `en` | `messages.py`（表示の言語。下の「多言語対応」） |
+| `explain` | `{"model": "sonnet", "effort": "low"}` | `effort` は `low` / `medium` / `high` / `xhigh` / `max`（不正なら `low`）。`model` は空でない文字列 | `notify_window.py` の解説の起動（設定画面は無し） |
 | `width` | 600 | 280〜800（px） | `notify_window.py` の `WIDTH` |
 | `command_line_limit` | `null`（自動） | 20〜200（文字） | `hook_notify.py` の `format_command` |
 | `notify` | `NOTIFY_DEFAULTS` | 場面ごとの bool | `hook_notify.py` の `main`（`Config.enabled`） |
@@ -277,7 +278,8 @@ notify_window.py（PySide6・使い捨てプロセス）
   JSON の形が崩れていればボタン無しの表示にする。
 - 「解説」ボタン: `--explain-input` があり、claude の実行ファイル（`CLAUDE_CODE_EXECPATH` → PATH 上の `claude`
   の順に探す）が見つかる場合のみ、ボタン行の左端に出す。押すと `QProcess` で非同期に
-  `claude -p --model sonnet --tools "" --setting-sources "" --no-session-persistence --system-prompt <EXPLAIN_PROMPT> <操作内容>`
+  `claude -p --model <explain.model> --effort <explain.effort> --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --no-session-persistence --system-prompt <EXPLAIN_PROMPT> <操作内容>`
+  （標準出力の `stream_event` の `text_delta` を届いた分から解説欄に足して表示し、終了時の `result` の本文で置き換える。`is_error` なら失敗として表示）
   を起動し、完了したら結果の Markdown をコマンド欄の下の解説欄（`QTextBrowser`）に表示する。
   - 再帰防止: `--setting-sources ""` でユーザー設定の Hook を読ませず、環境変数 `HOOKNOTICE_DISABLED=1` も付ける。
     `--tools ""` でツールは一切実行させない。作業中プロジェクトの CLAUDE.md を読ませないよう、作業ディレクトリは一時ディレクトリにする。
@@ -362,6 +364,13 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
   `uv sync` の印ファイルには依存ファイルの中身のハッシュを書き、更新日時ではなく中身で比べるようにした。
   設定画面のスキルは `/hooknotice-settings` から `/hooknotice:settings` になった。docs は `docs/` にまとめた。
   `pyproject.toml` の `license-files` はプラグインのフォルダに LICENSE が無いため外した（`license = "MIT"` は残す）。
+
+### 2026-09-29: 解説のモデル・effort の切り替えと逐次表示
+
+- **理由**: 解説の速さと質を、利用者が選べるようにする。生成が終わるまで待たず、届いた分から読めるようにする。
+- **変更内容**: `config.json` に `explain`（`model` 既定 `sonnet`、`effort` 既定 `low`）を追加（設定画面は無し）。
+  `claude -p` に `--effort` と `--output-format stream-json --verbose --include-partial-messages` を付け、`text_delta` を届いた分から解説欄に表示する。
+  `plugin.json` の version を 0.1.1 にした。
 
 ### 2026-09-28: 英語・日本語の多言語対応
 

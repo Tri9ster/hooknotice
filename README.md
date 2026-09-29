@@ -187,6 +187,7 @@ The Windows support code is included but has not been tested on a real machine.
   | `delay_mode` | `fixed` | `fixed` / `reading` | How to decide the delay. `fixed` uses `delay_seconds` as is. `reading` uses the length of the notification body (command, plan, question, Claude's response, etc.; whitespace and line breaks are not counted; max 120 s) |
   | `reading_cpm` | 600 | 100–3000 (chars/min) | Reading speed for `reading`. For example, with 600, 300 characters take 30 s |
   | `sound` | `{"enabled": true, "source": "system", "system": "Glass", "file": ""}` | — | Sound. `source` is `system` (a system sound named in `system`) or `file` (a path in `file`) |
+  | `explain` | `{"model": "sonnet", "effort": "low"}` | `effort`: `low` / `medium` / `high` / `xhigh` / `max` | Model and effort used by "Explain". `model` is passed to `claude --model` as is. There is no settings window for this; edit the file. The explanation is shown as it arrives |
 
   If the file is missing, cannot be read as JSON, or has out-of-range values, the defaults are used.
 - **Language**: notifications, buttons, the settings window, the setup dialog, the explanation Claude writes with

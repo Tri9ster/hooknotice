@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-09-29: 解説のモデル・effort の設定化と、docs 更新ルールの追加（Issue #3）
+
+### 目的
+- 解説を作る `claude -p` のモデルと effort を、設定画面は作らず `config.json` で切り替えられるようにする。
+  既定は `sonnet` / `low`。あわせて `--output-format stream-json` を使い、届いた分から解説欄に出す。
+- 機能追加・修正のたびに docs を更新する運用を、`CLAUDE.md` で必須にする。
+
+### 決めたこと
+- 設定は `config.json` の `explain`（`model` 既定 `sonnet`、`effort` 既定 `low`）。`effort` は `low` / `medium` / `high` /
+  `xhigh` / `max`、不正な値は既定値に戻す。`model` は `claude --model` にそのまま渡す。
+- 表示は `--output-format stream-json --verbose --include-partial-messages` の `text_delta` を届いた順に出し、終了時は
+  `result` の本文で置き換える（`is_error` なら失敗表示）。利用者に届けるため `plugin.json` の version を 0.1.1 に上げる。
+- `CLAUDE.md` に「docs の更新（コミット前に必須）」の節を足し、`docs/README.md` の約束にも同じことを書いた。
+- `docs/specification.md`（設定表・解説の起動コマンド・変更履歴）と README の英日にも反映した。
+
+### 分かったこと
+- 利用者が macOS の実機で、`claude/issue-3-20260929-1334` の実装に問題ないことを確認済み。
+  Actions 上の環境では `git merge` / `git checkout <branch> -- <files>` が承認待ちになるため、
+  1334 と 1409 のブランチの差分を読み、手作業で本ブランチに取り込んだ（内容は同じ。この環境では py_compile と `load_config` の確認のみ）。
+
+---
+
 ## 2026-09-28（2回目）: Claude Code プラグイン化
 
 ### 目的

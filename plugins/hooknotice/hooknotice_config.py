@@ -29,6 +29,10 @@ READING_CPM_RANGE = (100, 3000)
 READING_DELAY_MAX = 120  # 文字数から決めるときの上限（秒）
 # 表示の言語: auto（OS の言語が日本語なら ja、それ以外は en）/ ja / en。文言は messages.py
 LANGUAGES = ("auto", "ja", "en")
+# 解説（claude -p）のモデルと effort。設定画面は無く、config.json の explain で変える
+DEFAULT_EXPLAIN_MODEL = "sonnet"
+EXPLAIN_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+DEFAULT_EXPLAIN_EFFORT = "low"
 
 # コマンド欄の1文字の幅（Menlo 11px の実測値）と、カード幅のうち文字に使えない分
 # （左右の余白 12+8、枠と padding 8、スクロールバー 6）
@@ -87,6 +91,8 @@ class Config:
     sound_system: str = DEFAULT_SYSTEM_SOUND  # システムの通知音の名前（拡張子なし）
     sound_file: str = ""  # 任意の音声ファイルのパス
     language: str = "auto"  # LANGUAGES のどれか
+    explain_model: str = DEFAULT_EXPLAIN_MODEL  # 解説に使うモデル（claude --model に渡す文字列）
+    explain_effort: str = DEFAULT_EXPLAIN_EFFORT  # EXPLAIN_EFFORTS のどれか
 
     def sound_path(self) -> str:
         """鳴らす音声ファイルのパス。鳴らさないなら空文字。任意のファイルが無くなっていればシステムの音にする。"""
@@ -142,6 +148,8 @@ def load_config(path: str = CONFIG_PATH) -> Config:
     if isinstance(raw_notify, dict):
         notify.update({k: v for k, v in raw_notify.items() if isinstance(k, str) and isinstance(v, bool)})
     sound = data.get("sound") if isinstance(data.get("sound"), dict) else {}
+    explain = data.get("explain") if isinstance(data.get("explain"), dict) else {}
+    model = explain.get("model")
     return Config(
         width=width,
         command_line_limit=line_limit,
@@ -156,6 +164,8 @@ def load_config(path: str = CONFIG_PATH) -> Config:
         else DEFAULT_SYSTEM_SOUND,
         sound_file=sound.get("file") if isinstance(sound.get("file"), str) else "",
         language=data.get("language") if data.get("language") in LANGUAGES else "auto",
+        explain_model=model.strip() if isinstance(model, str) and model.strip() else DEFAULT_EXPLAIN_MODEL,
+        explain_effort=explain.get("effort") if explain.get("effort") in EXPLAIN_EFFORTS else DEFAULT_EXPLAIN_EFFORT,
     )
 
 
