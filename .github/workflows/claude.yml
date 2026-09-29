@@ -62,5 +62,5 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr *)'
           # claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3:*),Bash(git:*)"'
-          claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3 -m pytest:*),Bash(python3:*),Bash(pip:*),Bash(claude:*)"' ##2026-09-29 追加 by claude
+          claude_args: '--allowedTools "Bash(python3 -m py_compile:*),Bash(python3 -m pytest:*),Bash(python3:*),Bash(pip:*),Bash(claude:*),Bash(git fetch:*)"' ##2026-09-29 追加 by claude
 
