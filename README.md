@@ -115,8 +115,19 @@ them to the clipboard):
 
 ### Updating and uninstalling
 
-- **Update**: open `/plugin`, and update hooknotice from the "Installed" tab (or run
-  `claude plugin update hooknotice@hooknotice`), then restart Claude Code.
+- **Update**: fetch the latest version from GitHub in one of the following ways, then restart Claude Code
+  (in VS Code, reload the window).
+  - **Inside Claude Code** (the terminal version of Claude Code; `/plugin` is not available in the VS Code extension,
+    so use the terminal method below there): open `/plugin`, update hooknotice in the "Marketplaces" tab, then
+    update hooknotice in the "Installed" tab.
+  - **From a terminal**:
+
+    ```bash
+    claude plugin marketplace update hooknotice    # fetch the latest marketplace from GitHub
+    claude plugin update hooknotice@hooknotice     # update the plugin to the latest version
+    ```
+
+  You can check the updated version in the `Version` field of `claude plugin list`.
 - **Uninstall**: `/plugin uninstall hooknotice@hooknotice` (or `claude plugin uninstall hooknotice@hooknotice`).
   This also deletes the data folder (`venv` and `config.json`). The state folder
   (`~/Library/Application Support/hooknotice/`) is left; delete it yourself if you like.

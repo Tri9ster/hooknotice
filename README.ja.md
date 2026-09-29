@@ -101,8 +101,17 @@ uv が見つからないときは、uv の入れ方と pip で入れる手順を
 
 ### 更新・アンインストール
 
-- **更新**: `/plugin` を開き、「Installed」タブから hooknotice を更新します（または
-  `claude plugin update hooknotice@hooknotice`）。その後 Claude Code を再起動します。
+- **更新**: 次のどちらかで最新版を GitHub から取り込み、その後 Claude Code を再起動します（VS Code はウィンドウの再読み込み）。
+  - **Claude Code の中から**（ターミナル版の Claude Code。VS Code 拡張では `/plugin` が使えないので、下のターミナルの方法を使う）:
+    `/plugin` を開き、「Marketplaces」タブで hooknotice を更新してから、「Installed」タブで hooknotice を更新します。
+  - **ターミナルから**:
+
+    ```bash
+    claude plugin marketplace update hooknotice    # GitHub から最新のマーケットプレイスを取得
+    claude plugin update hooknotice@hooknotice     # プラグインを最新版に更新
+    ```
+
+  `claude plugin list` の `Version` で、更新後の版を確かめられます。
 - **アンインストール**: `/plugin uninstall hooknotice@hooknotice`（または `claude plugin uninstall hooknotice@hooknotice`）。
   データフォルダ（`venv` と `config.json`）も削除されます。状態フォルダ（`~/Library/Application Support/hooknotice/`）
   は残るので、不要なら手で削除してください。
