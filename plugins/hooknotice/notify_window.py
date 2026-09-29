@@ -78,7 +78,6 @@ GAP = 10
 CORNER_RADIUS = 12  # macOSの純正ダイアログ相当の角丸半径
 
 # 「解説」ボタンで Claude に操作の解説を書かせる（claude -p を非同期で起動する）
-EXPLAIN_MODEL = "sonnet"
 EXPLAIN_MIN_HEIGHT = 80  # 画面に収まらないとき、解説欄はこの高さまで縮めてスクロールさせる
 EXPLAIN_HEADING_PX = {1: 14, 2: 13, 3: 13}  # 見出しの文字サイズ（本文は 11px、4以下は 12px）
 # 解説を頼むシステムプロンプトは messages.py の explain.prompt（言語ごと）
@@ -424,6 +423,9 @@ class NotificationWindow(QWidget):
         self._explain_button: QPushButton | None = None
         self._explain_view: QTextBrowser | None = None
         self._explain_process: QProcess | None = None
+        self._explain_buffer = b""  # stream-json の、まだ改行まで届いていない分
+        self._explain_text = ""  # 届いた text_delta をつなげた解説
+        self._explain_result: dict | None = None  # 終了時の result イベント
         self._explain_markdown = ""  # 表示中の解説。外観の切り替え時に書式を当て直すために持つ
         self._markdown = markdown  # 本文として表示する Markdown（質問・計画の承認待ち）
         self._markdown_view: QTextBrowser | None = None
@@ -659,14 +661,21 @@ class NotificationWindow(QWidget):
         process.setProcessEnvironment(env)
         # 作業中プロジェクトの CLAUDE.md を読み込ませない
         process.setWorkingDirectory(tempfile.gettempdir())
+        process.readyReadStandardOutput.connect(self._on_explain_output)
         process.finished.connect(self._on_explain_finished)
         process.errorOccurred.connect(self._on_explain_error)
         self._explain_process = process
+        self._explain_buffer = b""
+        self._explain_text = ""
+        self._explain_result = None
         process.start(
             executable,
             [
                 "-p",
-                "--model", EXPLAIN_MODEL,
+                "--model", CONFIG.explain_model,
+                "--effort", CONFIG.explain_effort,
+                # 届いた分から表示するため、逐次の出力（stream-json）にする
+                "--output-format", "stream-json", "--verbose", "--include-partial-messages",
                 "--tools", "",  # 解説のためにツールを実行させない
                 "--setting-sources", "",  # ユーザー設定の Hook（この通知）を読み込ませない
                 "--no-session-persistence",
@@ -676,11 +685,43 @@ class NotificationWindow(QWidget):
         )
         process.closeWriteChannel()  # 閉じないと stdin 待ちで数秒遅れる
 
+    def _on_explain_output(self) -> None:
+        """届いた stream-json を1行ずつ読み、text_delta の分だけ解説欄に足して表示する。"""
+        process = self._explain_process
+        if process is None or self._closing:
+            return
+        self._explain_buffer += bytes(process.readAllStandardOutput())
+        *lines, self._explain_buffer = self._explain_buffer.split(b"\n")
+        shown = False
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "result":
+                self._explain_result = event
+                continue
+            inner = event.get("event") if event.get("type") == "stream_event" else None
+            delta = inner.get("delta") if isinstance(inner, dict) and inner.get("type") == "content_block_delta" else None
+            if isinstance(delta, dict) and delta.get("type") == "text_delta" and isinstance(delta.get("text"), str):
+                self._explain_text += delta["text"]
+                shown = True
+        if shown:
+            self._show_explain(self._explain_text, markdown=True)
+
     def _on_explain_finished(self, exit_code: int, exit_status) -> None:
         process = self._explain_process
         if process is None or self._closing:
             return
-        output = bytes(process.readAllStandardOutput()).decode("utf-8", "replace").strip()
+        self._on_explain_output()  # 残りを読み切る
+        result = self._explain_result or {}
+        text = result.get("result") if isinstance(result.get("result"), str) else ""
+        output = (text or self._explain_text).strip()
+        if result.get("is_error"):
+            self._fail_explain(output or tr("explain.exit_code", code=exit_code))
+            return
         if exit_status == QProcess.NormalExit and exit_code == 0 and output:
             self._explain_process = None
             self._explain_button.setText(tr("button.explain"))

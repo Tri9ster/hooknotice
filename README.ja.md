@@ -165,6 +165,7 @@ Windows の対応コードは入っていますが、実機では確認してい
   | `delay_mode` | `fixed` | `fixed` / `reading` | 待ち時間の決め方。`fixed` は `delay_seconds` のまま。`reading` は通知の本文（コマンド・計画・質問・Claude の返答など）の文字数から決める（空白・改行は数えない。上限120秒） |
   | `reading_cpm` | 600 | 100〜3000（文字/分） | `reading` のときの読む速さ。例: 600 なら 300字で30秒 |
   | `sound` | `{"enabled": true, "source": "system", "system": "Glass", "file": ""}` | — | 通知音。`source` は `system`（システムの音、`system` に名前）か `file`（`file` にパス） |
+  | `explain` | `{"model": "sonnet", "effort": "low"}` | `effort`: `low` / `medium` / `high` / `xhigh` / `max` | 「解説」に使うモデルと effort。`model` は `claude --model` にそのまま渡します。設定画面は無く、ファイルで変えます。解説は届いた分から順に表示されます |
 
   ファイルが無い・JSON として読めない・範囲外の値のときは既定値を使います。
 - **言語**: 通知・ボタン・設定画面・準備のダイアログ、「解説」で Claude が書く解説文、キャンセル時に Claude に返す
