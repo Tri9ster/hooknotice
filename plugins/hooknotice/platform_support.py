@@ -361,6 +361,29 @@ def activate_app(bundle_id: str) -> None:
     )
 
 
+def frontmost_app_id() -> str:
+    """いま最前面（フォーカス中）のアプリの bundle id。macOS のみ。判定できなければ空文字。
+
+    `lsappinfo` は LaunchServices に直接問い合わせるので、osascript と違って自動操作の許可が要らず速い。
+    Windows は発火元アプリの識別子が無いため未対応（空文字）。
+    """
+    if not IS_MAC:
+        return ""
+    try:
+        asn = subprocess.run(
+            ["lsappinfo", "front"], capture_output=True, text=True, timeout=3,
+        ).stdout.strip()
+        if not asn:
+            return ""
+        out = subprocess.run(
+            ["lsappinfo", "info", "-only", "bundleid", asn], capture_output=True, text=True, timeout=3,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    # 出力は `"CFBundleIdentifier"="com.apple.Terminal"`
+    return out.partition("=")[2].strip().strip('"')
+
+
 def is_executable(path: str) -> bool:
     """実行できるファイルか。Windows の os.access(X_OK) は常に真なので存在だけを見る。"""
     if IS_WINDOWS:

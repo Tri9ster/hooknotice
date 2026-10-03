@@ -92,6 +92,9 @@ notify_window.py（PySide6・使い捨てプロセス）
   - それ以外（async）は、待っている間に同じセッションで `UserPromptSubmit` があれば出さない（`prompted_since`）。
   - Claude Code 自身が待ってから出す `NO_DELAY_NOTIFICATIONS`（`permission_prompt` / `idle_prompt` /
     `elicitation_dialog` / `elicitation_url_dialog`）は待たない。
+- 前面アプリの判定: 設定 `suppress_when_focused`（既定 false）が true で、通知を出す直前（待ち時間のあと）に、
+  Claude Code を起動したアプリ（`host_bundle_id`）が最前面（`platform_support.frontmost_app_id`、`lsappinfo`）なら何もせず終了する
+  （許可待ちは何も出力しない＝通常のダイアログ）。起動元か最前面のアプリが分からなければ通知する。Windows は未対応（常に通知する）。
 - `prompt_submit`（UserPromptSubmit）: 状態ディレクトリの `prompts.json` に `{session_id: 送信時刻}` を記録して終了する
   （`locked_state` で排他。1日以上前の記録は書き込みのたびに消す）。
 - `session_start`（SessionStart・同期・すぐ終わる。何も出力しない）: 準備が必要（`needs_sync`）なら `start_setup()` で
@@ -201,6 +204,7 @@ notify_window.py（PySide6・使い捨てプロセス）
 | `system_sound_dir` / `list_system_sounds` | `/System/Library/Sounds` の `.aiff` | `%SystemRoot%\Media` の `.wav` |
 | `DEFAULT_SYSTEM_SOUND` | `Glass` | `Windows Notify System Generic` |
 | `play_sound(path)` | `afplay <path>`（aiff / wav / mp3 / m4a / caf） | `winsound.PlaySound`（WAV のみ） |
+| `frontmost_app_id` | `lsappinfo front` / `lsappinfo info -only bundleid` で最前面アプリの bundle id | 未対応（空文字） |
 | `activate_app` | `osascript` で bundle id のアプリを前面化 | 何もしない |
 | `is_executable` | `os.access(X_OK)` | ファイルの存在のみ（`X_OK` が常に真のため） |
 | `system_language` | `~/Library/Preferences/.GlobalPreferences.plist` の `AppleLanguages` 先頭（`plistlib`） | `GetUserDefaultUILanguage` の主言語 |
@@ -223,6 +227,7 @@ notify_window.py（PySide6・使い捨てプロセス）
 | `sound` | `enabled: true`、`source: "system"`、`system`: OS の既定、`file: ""` | — | `notify_window.py`（`Config.sound_path`） |
 | `delay_seconds` | 6 | 0〜60（秒） | `hook_notify.py` の `main`（放置の判定）。`reading` のときは最低の待ち時間 |
 | `delay_mode` | `fixed` | `fixed` / `reading` | `Config.delay_for`（待ち時間の決め方） |
+| `suppress_when_focused` | `false` | bool | `hook_notify.py` の `main`（`host_app_focused`） |
 | `reading_cpm` | 600 | 100〜3000（文字/分） | `Config.delay_for`（`reading` のときの読む速さ） |
 
 場面の一覧（キー・既定・分類）は `hooknotice_config.SCENES` に1か所で定義し、Hook と設定画面の両方が使う。
@@ -232,7 +237,7 @@ notify_window.py（PySide6・使い捨てプロセス）
 
 ### 設定画面（`settings_window.py`）
 
-- PySide6。「表示」（言語、横幅、改行する文字数と「幅に合わせて自動」、待ち時間）と「通知する場面」（`SCENES` を分類ごとにチェックボックスで）。
+- PySide6。「表示」（言語、横幅、改行する文字数と「幅に合わせて自動」、待ち時間、アプリが前面のときは通知しない）と「通知する場面」（`SCENES` を分類ごとにチェックボックスで）。
 - 「通知音」: 鳴らすか、システムの音（`list_system_sounds` の一覧、フォルダを OS ごとに表示）か任意の音声ファイル
   （`QFileDialog`、`SOUND_FILE_SUFFIXES` で絞る）か。「試聴」で `play_sound`。任意のファイルが無いと保存しない。
 - 「保存」で `save_config`。「テスト通知」は保存してから `notify_window.py` でサンプルを出す。未保存で閉じると確認する。
@@ -353,6 +358,12 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
 - トレイメニュー等の設定UIは無い。
 
 ## 8. 変更履歴
+
+### 2026-10-03: アプリが前面のときは通知しない設定（Issue #7）
+
+- **変更内容**: 設定 `suppress_when_focused`（既定 false、設定画面のチェックボックス）を追加した。true のとき、通知を出す直前に
+  Claude Code を起動したアプリが最前面なら通知を出さない（4章）。macOS のみ。
+- **理由**: ターミナルや VS Code を見ているときは、通知ウィンドウも音も不要なため。
 
 ### 2026-09-28（2回目）: Claude Code プラグインとして配布する
 

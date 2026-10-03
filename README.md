@@ -57,6 +57,10 @@ The detailed specification, technical notes, the development log, and the record
     If you only look at the screen without doing anything, it appears.
   - Notifications that Claude Code itself shows after waiting (permission dialog left open, idle after a
     response, MCP input form / URL) are shown at once, without the extra delay.
+- Optionally, **no notification is shown while the app running Claude Code (terminal, VS Code, ...) is in front**
+  (off by default; turn it on in the settings window; macOS only). This is checked right before showing, so if you
+  switch to another app during the delay, the notification appears. Permission requests are then answered in the
+  usual dialog.
 - The window **does not close by itself until you press the close button or click it** (permission
   notifications close automatically when you answer in the terminal first, or when the hook times out after
   600 seconds).
@@ -196,6 +200,7 @@ The Windows support code is included but has not been tested on a real machine.
   | `notify` | Table above | `true` / `false` per kind | Kinds not listed use their defaults |
   | `delay_seconds` | 6 | 0–60 (s) | Delay before notifying. Nothing is shown if you act during this time. 0 shows it at once. When `delay_mode` is `reading`, this is the minimum delay |
   | `delay_mode` | `fixed` | `fixed` / `reading` | How to decide the delay. `fixed` uses `delay_seconds` as is. `reading` uses the length of the notification body (command, plan, question, Claude's response, etc.; whitespace and line breaks are not counted; max 120 s) |
+  | `suppress_when_focused` | `false` | `true` / `false` | When `true`, nothing is shown while the app that launched Claude Code is the frontmost app (macOS only) |
   | `reading_cpm` | 600 | 100–3000 (chars/min) | Reading speed for `reading`. For example, with 600, 300 characters take 30 s |
   | `sound` | `{"enabled": true, "source": "system", "system": "Glass", "file": ""}` | — | Sound. `source` is `system` (a system sound named in `system`) or `file` (a path in `file`) |
   | `explain` | `{"model": "sonnet", "effort": "low"}` | `effort`: `low` / `medium` / `high` / `xhigh` / `max` | Model and effort used by "Explain". `model` is passed to `claude --model` as is. There is no settings window for this; edit the file. The explanation is shown as it arrives |

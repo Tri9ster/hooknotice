@@ -173,6 +173,16 @@ class SettingsWindow(QWidget):
         cpm_row.addWidget(self._cpm_hint, 1)
         form.addRow(tr("settings.cpm", default=DEFAULT_READING_CPM), cpm_row)
         self._update_delay_widgets()
+
+        self._suppress_focused = QCheckBox(tr("settings.suppress_focused"))
+        self._suppress_focused.setChecked(config.suppress_when_focused)
+        suppress_hint = QLabel(tr("settings.suppress_focused_hint"))
+        suppress_hint.setStyleSheet("color: gray;")
+        suppress_hint.setWordWrap(True)
+        suppress_column = QVBoxLayout()
+        suppress_column.addWidget(self._suppress_focused)
+        suppress_column.addWidget(suppress_hint)
+        form.addRow(tr("settings.suppress_focused_label"), suppress_column)
         return group
 
     def _update_delay_widgets(self, *_args) -> None:
@@ -312,6 +322,7 @@ class SettingsWindow(QWidget):
             "delay_seconds": self._delay.value(),
             "delay_mode": "reading" if self._delay_reading.isChecked() else "fixed",
             "reading_cpm": self._reading_cpm.value(),
+            "suppress_when_focused": self._suppress_focused.isChecked(),
             "notify": {key: box.isChecked() for key, box in self._scene_boxes.items()},
             "sound": {
                 "enabled": self._sound_enabled.isChecked(),
