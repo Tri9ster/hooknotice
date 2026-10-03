@@ -90,6 +90,7 @@ class Config:
     sound_source: str = "system"  # "system"（システムの通知音）/ "file"（任意の音声ファイル）
     sound_system: str = DEFAULT_SYSTEM_SOUND  # システムの通知音の名前（拡張子なし）
     sound_file: str = ""  # 任意の音声ファイルのパス
+    suppress_when_focused: bool = False  # Claude Code を起動したアプリが最前面のときは通知しない（macOS）
     language: str = "auto"  # LANGUAGES のどれか
     explain_model: str = DEFAULT_EXPLAIN_MODEL  # 解説に使うモデル（claude --model に渡す文字列）
     explain_effort: str = DEFAULT_EXPLAIN_EFFORT  # EXPLAIN_EFFORTS のどれか
@@ -163,6 +164,8 @@ def load_config(path: str = CONFIG_PATH) -> Config:
         sound_system=sound.get("system") if isinstance(sound.get("system"), str) and sound.get("system")
         else DEFAULT_SYSTEM_SOUND,
         sound_file=sound.get("file") if isinstance(sound.get("file"), str) else "",
+        suppress_when_focused=data.get("suppress_when_focused") if isinstance(data.get("suppress_when_focused"), bool)
+        else False,
         language=data.get("language") if data.get("language") in LANGUAGES else "auto",
         explain_model=model.strip() if isinstance(model, str) and model.strip() else DEFAULT_EXPLAIN_MODEL,
         explain_effort=explain.get("effort") if explain.get("effort") in EXPLAIN_EFFORTS else DEFAULT_EXPLAIN_EFFORT,

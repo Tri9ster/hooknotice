@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-10-03: アプリが前面のときは通知しない設定（Issue #7）
+
+### 目的
+- Claude Code を起動したアプリ（ターミナル・VS Code など）が最前面のときは、通知を出さない機能と設定を作る。
+
+### 決めたこと
+- 設定は `config.json` の `suppress_when_focused`（bool、既定 false。従来の動作を変えないため）。設定画面の「表示」にチェックボックスを足した。
+- 判定は `main` で待ち時間のあと、`notify` の直前。発火元は既存の `host_bundle_id()`、最前面は `platform_support.frontmost_app_id()`
+  （`lsappinfo front` → `lsappinfo info -only bundleid`）。どちらかが分からなければ通知する。
+- 許可待ちで抑止したときは何も出力せず exit 0（設定でオフにした場合と同じ＝通常のダイアログ）。
+- Windows は発火元アプリの識別子が無いので未対応（常に通知）。`plugin.json` の version を 0.1.2 に上げた。
+
+### 分かったこと
+- Actions（Linux）では `lsappinfo` が無いので動作は確認できない。構文チェックと、`frontmost_app_id` をスタブにした分岐の確認まで。
+  手元の macOS で、ターミナル／VS Code が前面のときに出ないこと、別アプリへ移ると出ることを確かめる必要がある。
+
+---
+
 ## 2026-09-30: `@claude` の実行者の制限と、Actions の依存を uv とキャッシュで入れる
 
 ### 目的

@@ -27,6 +27,7 @@ from platform_support import (
     bash_path,
     copy_to_clipboard,
     find_uv,
+    frontmost_app_id,
     locked_state,
     plugin_data_dir,
     popen_flags,
@@ -946,6 +947,12 @@ def prompted_since(payload: dict, since: float) -> bool:
     return isinstance(sent, (int, float)) and sent >= since
 
 
+def host_app_focused() -> bool:
+    """Claude Code を起動したアプリが、いま最前面か。起動元か最前面のアプリが分からなければ False（通知する）。"""
+    host = host_bundle_id()
+    return bool(host) and frontmost_app_id() == host
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", default="permission_request")
@@ -989,6 +996,10 @@ def main() -> int:
             if prompted_since(payload, started):
                 return 0
     try:
+        # 待ったあとの今の状態で判定する（待つ間に別のアプリへ移っていれば通知する）。
+        # 許可待ちは何も出力しない＝通常どおりターミナル側のダイアログで答える
+        if config.suppress_when_focused and host_app_focused():
+            return 0
         notify(args.event, payload)
     except Exception:
         pass  # 通知に失敗しても Claude Code をブロックしない
