@@ -89,15 +89,21 @@ Claude Code で、マーケットプレイスを追加してプラグインを�
 環境（`venv`）は、プラグインの更新でも消えないデータフォルダ `~/.claude/plugins/data/hooknotice-hooknotice/venv`
 に作られます。準備が済むまで、通知は表示されません。
 
-uv が見つからないときは、uv の入れ方と pip で入れる手順をダイアログに表示します（「手順をコピー」でクリップボードにコピーできます）。
+uv が見つからないときは、uv の入れ方と pip で入れる手順をダイアログに表示します。ボタンは次の3つです。
+
+- **pip で準備する**: uv を使わずに、その場で下の pip の手順を実行し、終わったら結果を表示します。
+- **手順をコピー**: 表示している手順をクリップボードにコピーします（自分で実行する場合）。
+- **今後確認しない**: 以後このダイアログを出しません。
+
+手順の中身は次のとおりです。
 
 - **uv を入れる（推奨）**: `curl -LsSf https://astral.sh/uv/install.sh | sh`（または `brew install uv`、`pip3 install uv`）
   の後、Claude Code を起動し直して「実行する」を選びます。
-- **uv を使わずに pip で入れる**:
+- **uv を使わずに pip で入れる**（「pip で準備する」が実行する内容。Python は Hook を動かしているものを使います）:
 
   ```bash
   python3 -m venv ~/.claude/plugins/data/hooknotice-hooknotice/venv
-  ~/.claude/plugins/data/hooknotice-hooknotice/venv/bin/pip install "PySide6-Essentials>=6.7"
+  ~/.claude/plugins/data/hooknotice-hooknotice/venv/bin/python3 -m pip install "PySide6-Essentials>=6.7"
   ```
 
   Python 3.10 以上なら最新版、macOS 標準の Python 3.9 なら 3.9 に対応する版（6.10 系）が入ります。
@@ -123,12 +129,14 @@ uv が見つからないときは、uv の入れ方と pip で入れる手順を
 
 Windows の対応コードは入っていますが、実機では確認していません。
 
-1. [uv](https://docs.astral.sh/uv/) を入れ（PowerShell で `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`）、
-   準備の確認ダイアログで「実行する」を選びます（データフォルダ `%USERPROFILE%\.claude\plugins\data\hooknotice-hooknotice`
-   に `venv\Scripts\python.exe` が作られます）。
+1. Python 3.9 以上が必要です。プラグインの Hooks は `python3` → `python` → `py -3` の順に試し、最初に動いたもので起動します
+   （Claude Code は Windows でも Hook を Git Bash で実行します）。どれも動かないときは、Claude Code の起動時に
+   「hooknotice: Python 3 was not found ...」と表示します。通知が出ない場合は、Git Bash でこの3つのどれかが動くか確認してください。
+2. 準備の確認ダイアログで「実行する」を選びます（[uv](https://docs.astral.sh/uv/) がある場合。PowerShell で
+   `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` で入れられます）。
+   uv が無い場合は「pip で準備する」を選べます。どちらも、データフォルダ `%USERPROFILE%\.claude\plugins\data\hooknotice-hooknotice`
+   に `venv\Scripts\python.exe` を作ります。
    確認ダイアログは Windows の標準のメッセージボックスで出ます（ボタンは「はい / いいえ / キャンセル」に割り当て）。
-2. プラグインの Hooks は `python3` で起動します。Claude Code は Windows でも Hook を Git Bash で実行しますが、
-   `python3` が無い環境が多いため、通知が出ない場合は Git Bash で `python3` が動くか確認してください。
 3. macOS との違い:
    - システムの通知音は `%SystemRoot%\Media`（通常 `C:\Windows\Media`）の WAV から選びます。任意の音声ファイルも WAV のみです。
    - 本体クリックでの発火元アプリ（VS Code 等）の前面化は行いません。

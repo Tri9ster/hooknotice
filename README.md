@@ -102,16 +102,21 @@ dialog asks whether it may run `uv sync --frozen` (the same happens when a plugi
 The environment (`venv`) is created in the plugin's data folder, `~/.claude/plugins/data/hooknotice-hooknotice/venv`,
 which is kept across plugin updates. No notifications are shown until the setup is done.
 
-If uv is not found, the dialog shows how to install uv, and how to set up with pip instead ("Copy steps" copies
-them to the clipboard):
+If uv is not found, the dialog shows how to install uv, and how to set up with pip instead. It has three buttons:
+
+- **Set up with pip**: runs the pip steps below right away, without uv, and shows the result when it finishes.
+- **Copy steps**: copies the steps shown in the dialog to the clipboard (if you want to run them yourself).
+- **Don't ask again**: never shows this dialog again.
+
+The steps are:
 
 - **Install uv (recommended)**: run `curl -LsSf https://astral.sh/uv/install.sh | sh` (or `brew install uv`,
   `pip3 install uv`), then restart Claude Code and choose "Run".
-- **Install with pip instead of uv**:
+- **Install with pip instead of uv** (this is what "Set up with pip" runs, using the Python that runs the hooks):
 
   ```bash
   python3 -m venv ~/.claude/plugins/data/hooknotice-hooknotice/venv
-  ~/.claude/plugins/data/hooknotice-hooknotice/venv/bin/pip install "PySide6-Essentials>=6.7"
+  ~/.claude/plugins/data/hooknotice-hooknotice/venv/bin/python3 -m pip install "PySide6-Essentials>=6.7"
   ```
 
   With Python 3.10 or later you get the latest version. With the Python 3.9 bundled with macOS you get a version
@@ -140,13 +145,15 @@ them to the clipboard):
 
 The Windows support code is included but has not been tested on a real machine.
 
-1. Install [uv](https://docs.astral.sh/uv/) (in PowerShell:
-   `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`), and choose "Run" in the
-   setup dialog (this creates `venv\Scripts\python.exe` in the data folder,
-   `%USERPROFILE%\.claude\plugins\data\hooknotice-hooknotice`).
+1. Python 3.9 or later is required. The plugin's hooks try `python3`, then `python`, then `py -3`, and use the first
+   one that starts (Claude Code runs hooks with Git Bash on Windows). If none of them works, Claude Code shows
+   "hooknotice: Python 3 was not found ..." when it starts. If notifications do not appear, check that one of the
+   three works in Git Bash.
+2. Choose "Run" in the setup dialog (if you have [uv](https://docs.astral.sh/uv/); to install it, run
+   `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` in PowerShell).
+   Without uv, you can choose "Set up with pip". Either way, this creates `venv\Scripts\python.exe` in the data
+   folder, `%USERPROFILE%\.claude\plugins\data\hooknotice-hooknotice`.
    The setup dialog is a standard Windows message box (the buttons are mapped to "Yes / No / Cancel").
-2. The plugin's hooks run `python3`. Claude Code runs hooks with Git Bash on Windows, but many environments have no
-   `python3`. If notifications do not appear, check that `python3` works in Git Bash.
 3. Differences from macOS:
    - System sounds are chosen from the WAV files in `%SystemRoot%\Media` (usually `C:\Windows\Media`). Custom
      sound files must also be WAV.

@@ -20,7 +20,9 @@
   2026-09-26 に OS ごとの処理を `platform_support.py` に切り出し、Windows の分岐を実装した（未検証）。残り:
   - Windows 実機で6種類の通知・積み順・ボタンの回答・Hook 終了時の自動クローズを確認する
     （Hook の起動コマンド `python` / `py -3`、子プロセスが Hook 終了後も残るか、UTF-8 の受け渡しを含む）
-  - プラグインの `hooks/hooks.json` は `python3` 固定。Windows で `python3` が無い場合の起動方法を決める
+  - 2026-10-04 に Hook のコマンドを `python3` → `python` → `py -3` の順に試す形にした（F-23、未検証）。実機で確かめる:
+    出なかった環境の Git Bash で3つのどれが動くか、準備の確認ダイアログが出るか、「pip で準備する」で通知が出るか、
+    Python が無いときに起動時の `systemMessage` が出るか、Hook が Windows PowerShell 5.1 で動く環境（`||` が使えない）があるか
   - Consolas 11px の1文字幅を実測し、`COMMAND_CHAR_WIDTH_PX` を OS 別にする
   - 通知表示でフォーカスを奪わないか、タスクバーにボタンが出ないか（`Qt.Tool` / `WA_ShowWithoutActivating` の検討）
   - 本体クリックでの発火元アプリの前面化（Windows は前面化の制限が強い）
