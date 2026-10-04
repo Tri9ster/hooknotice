@@ -38,7 +38,7 @@ Claude Code
   │ Hook 発火（stdin に JSON ペイロード）
   ▼
 hook_notify.py --event <種別>
-  ├─ ペイロードから表示内容を組み立てる（build_body / bash_command）
+  ├─ ペイロードから表示内容を組み立てる（build_body / shell_command）
   ├─ 発火元アプリの bundle id を推定（__CFBundleIdentifier → TERM_PROGRAM）
   │
   ├─ 許可待ち以外、または AskUserQuestion / ExitPlanMode
@@ -188,10 +188,11 @@ settings.json は変えずに、設定画面から場面ごとに切り替えら
 - 表示後に `_fit_height` → `_init_gradient_params`（グラデーションの終点を新しい高さに合わせる）→
   `StackSlot.update_height` の順に呼ぶ。
 
-### 4.7 コマンド欄の整形（`hook_notify.py` の `format_command`）
+### 4.7 コマンド欄の整形（`hook_notify.py` の `format_command` / `format_powershell_command`）
 
-Bash の許可待ちでは、コマンド欄に渡す前にワンライナーを複数行に整形する。表示専用で、解説に渡す内容と
-Claude Code に返す決定は元のコマンドのまま。
+Bash と PowerShell の許可待ちでは、コマンド欄に渡す前にワンライナーを複数行に整形する。表示専用で、解説に渡す内容と
+Claude Code に返す決定は元のコマンドのまま。ツール名から整形する関数を引く表が `COMMAND_FORMATTERS` で、
+`shell_command` がこれを使う。まず Bash（`format_command`）。
 
 1. `_scan_command` が1文字ずつ走査し、トップレベルの語と演算子（`;` `&&` `||` `|`）の列にする。
    - 語は**元の文字列の部分文字列**をそのまま使う（トークンを組み立て直さない）ので、引用符や中身は変わらない。
@@ -210,6 +211,23 @@ Claude Code に返す決定は元のコマンドのまま。
 
 開発時の検証では、元と整形後を `f() {…}; declare -f f` として bash に**定義だけ**させ、bash が正規化した
 関数定義が一致することを確認した（手元で用意した固定の文字列でのみ行う。実行時には使わない）。
+
+PowerShell（`format_powershell_command`）は、括弧の中のパイプも開いて字下げするので、平らな列ではなく木にする。
+
+1. `_parse_powershell` が再帰下降で木を作る。要素は `("text", 文字列)`・`("op", ; | && ||)`・
+   `("group", 開き, 中身, 閉じ)`・`("dq", 部品の列)`。
+   - text は**元の文字列の部分文字列**（空白も含めてそのまま）。`'…'`・`` ` ``+1文字・`${…}` は text の一部として読み飛ばす。
+   - `(` `$(` `@(` `{` `@{` `[`（`_PS_CLOSERS`）で group を開いて再帰し、閉じ括弧が対応しなければ `_Unsupported`。
+   - `"…"` は dq にし、中の `$(` だけをコードとして再帰する（部品は文字列か group）。
+   - 解析に自信が持てない書き方（既に複数行、ヒアストリング、コメント、`--%`、閉じていない引用符・括弧）は `_Unsupported`。
+2. `_ps_block` が文の並びを行にする。`;` で文に、`&&` / `||` で要素に、`|` で段に分け（`_ps_split`）、
+   段ごとに1行、2段目以降は `_PS_INDENT`（4文字）深く置く。トップレベルは文の間に空行、括弧の中は改行だけ。
+3. `_ps_inline` は要素を元のままつなぐ。group だけ `_ps_group` に渡し、直下に `|` があれば
+   「開き・改行・`_ps_block`（1段深く）・改行・閉じ」にする。`[ ]` と `;` を含む `( )` は開かない。
+   閉じ括弧の字下げは、開き括弧がある行の字下げ（引数の `indent`）。
+4. 最後に、整形結果と元のコマンドから空白を除いた文字列を比べ、違えば元のまま返す。
+   bash の `-n` に当たる確認だが、PowerShell は macOS に無く、起動も遅い（Hook を待たせる）ので、構文チェックには使わない。
+   そのぶん、行の区切りは PowerShell が必ず次の行へ続ける位置（`|`・`&&`・`||`・開き括弧の後ろ、`;` の後ろ）だけにしている。
 
 ### 4.8 設定ファイル（`hooknotice_config.py`）
 
@@ -322,6 +340,16 @@ Hook としての確認は、ペイロードを stdin に流して `hook_notify.
 ```bash
 echo '{"tool_name":"Bash","tool_input":{"command":"ls","description":"テスト"}}' \
   | python3 plugins/hooknotice/hook_notify.py --event permission_request
+```
+
+PowerShell の整形は、`plugins/hooknotice` で次のように確かめる（macOS でも動く。`tool_name` を `PowerShell` にした
+ペイロードを上の方法で流せば、コマンド欄の見た目も確かめられる）。
+
+```python
+import hook_notify as h
+print(h.format_powershell_command('"n=$(($top | Measure-Object).Count)"; $top | ForEach-Object { $_.Name }'))
+for raw in ("Get-Content a.txt # c | x", '"unclosed | x', "a ;; b | c", "cmd --% a | b"):
+    assert h.format_powershell_command(raw) == raw  # 解析できない書き方は元のまま
 ```
 
 実機の外観切り替えは次で行える（テスト後は元に戻すこと）。

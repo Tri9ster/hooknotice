@@ -127,11 +127,14 @@ notify_window.py（PySide6・使い捨てプロセス）
   タイトルにも付ける）と最後の報告（`last_assistant_message`）、タスクは `task_subject`・`task_description`・`teammate_name`、
   チームの仲間は `teammate_name` と `team_name`。既定はいずれもオフ。
   ウィンドウのタイトルを決める（`EVENT_TITLES`）。
-- Bash の許可待ち（`tool_name == "Bash"` かつ `tool_input.command` あり、`bash_command`）は、
+- Bash / PowerShell の許可待ち（`tool_name` が `COMMAND_FORMATTERS` のキー `"Bash"` / `"PowerShell"` のどちらかで、
+  `tool_input.command` あり、`shell_command`）は、
   `tool_input.description`（Claude が書くコマンドの説明）を `--description`、コマンド全文を
   `--command` として渡す。説明が無ければ `--description` は空。
-- `--command` に渡すコマンドは、読みやすいよう `format_command` で複数行に整形する（表示専用。
-  「解説」に渡す内容と Claude Code に返す決定には影響しない）。変えるのは空白・改行・行継続の `\` だけで、
+- `--command` に渡すコマンドは、読みやすいよう複数行に整形する（表示専用。
+  「解説」に渡す内容と Claude Code に返す決定には影響しない）。Bash は `format_command`、PowerShell は
+  `format_powershell_command`（下の項）。
+- Bash の整形（`format_command`）で変えるのは空白・改行・行継続の `\` だけで、
   シェルとしての意味は変わらない。
   - トップレベルの `;` は行末に残し、まとまりの間に空行を1行はさむ。
   - `&&` / `||` は常に行末に残して ` \` を付け、次の要素は行頭から始める。
@@ -140,6 +143,30 @@ notify_window.py（PySide6・使い捨てプロセス）
   - 引用符・`\` エスケープ・`$(…)`・`` `…` ``・括弧の中では区切らない。`2>&1`・`>|`・`&`（バックグラウンド）も区切らない。
   - ヒアドキュメント、既に複数行、閉じていない引用符・括弧、トップレベルのコメント、`;;`、`|&` は整形しない。
   - 整形結果は `/bin/bash -n`（構文チェックのみ。実行しない）で確かめ、通らなければ元のまま表示する。
+- PowerShell の整形（`format_powershell_command`）で変えるのは空白と改行だけ（PowerShell は `|`・`(`・`{`・`;`・`&&` の
+  後ろで改行できるので、行継続の `` ` `` は足さない）。
+  - トップレベルの `;` は行末に残し、文の間に空行を1行はさむ。
+  - パイプラインは長さに関係なく分ける（`command_line_limit` は使わない）。`|` は行末に残し、1段目はその文の字下げ位置、
+    2段目以降は4文字深く置く。
+  - `( )`・`$( )`・`@( )`・`{ }`・`@{ }` は、直下に `|` があるときだけ開く。開き括弧の後ろで改行し、中身を4文字字下げし、
+    閉じ括弧は開き括弧があった行の字下げ位置に置く。中の文は `;` ごとに1行（空行なし）。`|` が無い括弧は1行のまま。
+  - `"…"` の中の `$( )` も同じ規則で整形する。文字列のそれ以外の部分は変えない。
+  - `&&` / `||` は行末に残し、次の要素は同じ字下げ位置から始める。
+  - `'…'`・`` ` `` でエスケープした文字・`${…}`・`[ ]` の中・`;` を含む `( )`（`for (…; …; …)`）では区切らない。
+  - 既に複数行、ヒアストリング（`@"` / `@'`）、コメント（`#`・`<#`）、`--%`、閉じていない引用符・括弧、
+    空の文（`;;`）、空のパイプ段は整形しない。
+  - 整形結果から空白を除いた文字列が元と一致しなければ、元のまま表示する（PowerShell での構文チェックはしない）。
+  - 例: `"n=$(($top | Measure-Object).Count)"; $top | ForEach-Object { $_.Name }` は次のようになる。
+
+    ```powershell
+    "n=$((
+        $top |
+            Measure-Object
+    ).Count)";
+
+    $top |
+        ForEach-Object { $_.Name }
+    ```
 - それ以外の本文（`build_body`）は Claude Code が尋ねている内容:
   - `permission_request`: `"<tool_name>: <要約>"`。要約は `tool_input` のうち
     `TOOL_INPUT_SUMMARY_KEYS`（`command`, `file_path`, `notebook_path`, `pattern`, `url`, `query`,
@@ -366,6 +393,14 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
 - トレイメニュー等の設定UIは無い。
 
 ## 8. 変更履歴
+
+### 2026-10-04（2回目）: PowerShell のコマンドを複数行に整形する
+
+- **変更内容**: PowerShell の許可待ち（`tool_name == "PowerShell"`）も、Bash と同じく説明とコマンド欄に分けて表示し、
+  `format_powershell_command` でワンライナーを複数行に整形する（4章）。これまでは `PowerShell: <コマンド>` という本文だった。
+  待ち時間を文字数から決めるとき（`reading_text`）も、Bash と同じく説明とコマンドを数える。
+- **理由**: Windows では Claude Code がコマンドを PowerShell で実行し、長いワンライナーが読みにくかったため。
+  Windows は実機で未確認（`tool_name` の値を含む）。
 
 ### 2026-10-04: Windows の Python の名前の違いと、uv が無いときの準備
 

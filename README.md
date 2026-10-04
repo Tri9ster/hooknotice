@@ -18,6 +18,8 @@ The detailed specification, technical notes, the development log, and the record
   - Long one-liners are split into lines at `;` and `&&`, and environment variable prefixes and pipes are put on
     their own lines. Only whitespace and line breaks change, so the meaning of the command stays the same
     (anything that cannot be parsed is shown as is).
+  - PowerShell one-liners are also split into lines at `;`, with each pipeline stage on its own line and the
+    contents of parentheses that contain a pipe indented.
   - Other permission requests show the tool name and target, such as `Edit: <file path>`. Questions show the
     notification message.
   - When Claude finishes ("Claude Code: Done"), Claude's last response is formatted and shown ("Claude has
@@ -159,8 +161,8 @@ The Windows support code is included but has not been tested on a real machine.
      sound files must also be WAV.
    - Clicking the body does not bring the triggering app (VS Code, etc.) to the front.
    - The list of shown notifications is kept in `%LOCALAPPDATA%\hooknotice\stack_state.json`.
-   - Long commands are checked with Git Bash's `bash` before formatting. If it is not found, commands are shown
-     without formatting.
+   - Long Bash commands are checked with Git Bash's `bash` before formatting. If it is not found, commands are
+     shown without formatting. Formatting PowerShell commands does not need `bash`.
    - The monospaced font is Consolas. The automatic line length is still calculated from Menlo's character
      width, so if the wrapping looks off, adjust `command_line_limit` in `config.json`.
 
