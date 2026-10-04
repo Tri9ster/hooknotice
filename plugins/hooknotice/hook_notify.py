@@ -105,6 +105,10 @@ EXPLAIN_INPUT_MAX_CHARS = 8000
 
 # コマンド欄の整形で、長い要素の先頭から1行ずつに分ける環境変数の代入（NAME=値 / NAME+=値）
 _ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
+# PowerShell の整形で、中を再帰して読む括弧（開き → 閉じ）と、1段の字下げ
+_PS_CLOSERS = {"(": ")", "$(": ")", "@(": ")", "{": "}", "@{": "}", "[": "]"}
+_PS_INDENT = 4
+_WHITESPACE_RE = re.compile(r"\s+")
 
 # __CFBundleIdentifier が取れない場合の TERM_PROGRAM → bundle id の読み替え
 TERM_PROGRAM_BUNDLE_IDS = {
@@ -169,19 +173,20 @@ def build_body(event: str, payload: dict) -> str:
     return str(body).strip()  # 省略せず、改行もそのまま残す
 
 
-def bash_command(event: str, payload: dict) -> tuple[str, str] | None:
-    """Bash の許可待ちなら (説明, コマンド) を返す。説明は Claude が書いた description。"""
+def shell_command(event: str, payload: dict) -> tuple[str, str] | None:
+    """Bash / PowerShell の許可待ちなら (説明, コマンド) を返す。説明は Claude が書いた description。"""
     if event not in ("permission_request", "permission_prompt"):
         return None
     tool_input = payload.get("tool_input")
-    if payload.get("tool_name") != "Bash" or not isinstance(tool_input, dict):
+    formatter = COMMAND_FORMATTERS.get(payload.get("tool_name"))
+    if formatter is None or not isinstance(tool_input, dict):
         return None
     command = tool_input.get("command")
     if not isinstance(command, str) or not command.strip():
         return None
     description = tool_input.get("description")
     description = description.strip() if isinstance(description, str) else ""
-    return description, format_command(command.strip())
+    return description, formatter(command.strip())
 
 
 class _Unsupported(Exception):
@@ -360,6 +365,197 @@ def format_command(command: str, line_limit: int | None = None) -> str:
     except (OSError, subprocess.SubprocessError):
         return command
     return formatted if check.returncode == 0 else command
+
+
+def _parse_powershell(command: str) -> list:
+    """PowerShell のワンライナーを、括弧の入れ子を保った木にする。
+
+    要素は ("text", 文字列) / ("op", ; | && ||) / ("group", 開き, 中身, 閉じ) / ("dq", 部品の列)。
+    "…" の部品は、文字列か $( ) の group。文字は元の文字列をそのまま切り出すので、中身は変わらない。
+    解析に自信が持てない書き方は _Unsupported を投げる。
+    """
+    n = len(command)
+
+    def parse_code(i: int, closer: str) -> tuple[list, int]:
+        """closer（トップレベルは ""）までを読み、(要素の列, 閉じ括弧の次の位置) を返す。"""
+        items: list = []
+        text_start = i
+
+        def end_text(pos: int) -> None:
+            if pos > text_start:
+                items.append(("text", command[text_start:pos]))
+
+        while i < n:
+            ch = command[i]
+            two = command[i:i + 2]
+            if ch in "\r\n":
+                raise _Unsupported("既に複数行")
+            if ch == "`":
+                if i + 1 >= n or command[i + 1] in "\r\n":
+                    raise _Unsupported("既に複数行")
+                i += 2
+            elif ch == "'":
+                i += 1
+                while True:
+                    i = command.find("'", i)
+                    if i < 0:
+                        raise _Unsupported("閉じていない引用符")
+                    if not command.startswith("''", i):
+                        break
+                    i += 2  # '' は引用符そのもの
+                i += 1
+            elif ch == '"':
+                end_text(i)
+                parts, i = parse_double_quoted(i + 1)
+                items.append(("dq", parts))
+                text_start = i
+            elif two in ("<#", '@"', "@'") or command.startswith("--%", i):
+                raise _Unsupported("コメント・ヒアストリング・--%")
+            elif ch == "#" and (i == 0 or command[i - 1] in " \t;|({"):
+                raise _Unsupported("コメント")
+            elif two == "${":
+                i = command.find("}", i)
+                if i < 0:
+                    raise _Unsupported("閉じていない括弧")
+                i += 1
+            elif two in _PS_CLOSERS or ch in _PS_CLOSERS:
+                opener = two if two in _PS_CLOSERS else ch
+                end_text(i)
+                inner, i = parse_code(i + len(opener), _PS_CLOSERS[opener])
+                items.append(("group", opener, inner, _PS_CLOSERS[opener]))
+                text_start = i
+            elif ch in ")}]":
+                if ch != closer:
+                    raise _Unsupported("対応しない括弧")
+                end_text(i)
+                return items, i + 1
+            elif two in ("&&", "||") or ch in ";|":
+                op = two if two in ("&&", "||") else ch
+                end_text(i)
+                items.append(("op", op))
+                i += len(op)
+                text_start = i
+            else:
+                i += 1
+        if closer:
+            raise _Unsupported("閉じていない括弧")
+        end_text(n)
+        return items, n
+
+    def parse_double_quoted(i: int) -> tuple[list, int]:
+        """i は開き引用符の次。(部品の列, 閉じ引用符の次の位置) を返す。"""
+        parts: list = []
+        text_start = i
+        while i < n:
+            ch = command[i]
+            if ch in "\r\n":
+                raise _Unsupported("既に複数行")
+            if ch == "`" or command.startswith('""', i):
+                i += 2
+            elif command.startswith("$(", i):
+                parts.append(command[text_start:i])
+                inner, i = parse_code(i + 2, ")")
+                parts.append(("group", "$(", inner, ")"))
+                text_start = i
+            elif ch == '"':
+                parts.append(command[text_start:i])
+                return parts, i + 1
+            else:
+                i += 1
+        raise _Unsupported("閉じていない引用符")
+
+    return parse_code(0, "")[0]
+
+
+def _ps_split(items: list, ops: tuple[str, ...]) -> tuple[list[list], list[str]]:
+    """要素の列を、直下の演算子 ops で分ける。(分けた列, 間にあった演算子) を返す。"""
+    parts: list[list] = [[]]
+    separators: list[str] = []
+    for item in items:
+        if item[0] == "op" and item[1] in ops:
+            separators.append(item[1])
+            parts.append([])
+        else:
+            parts[-1].append(item)
+    return parts, separators
+
+
+def _ps_inline(items: list, indent: int) -> str:
+    """要素を元のままつなぐ。開く括弧だけ複数行になる。indent は今の行の字下げ。"""
+    out = []
+    for item in items:
+        if item[0] == "dq":
+            out.append('"' + "".join(
+                part if isinstance(part, str) else _ps_group(part, indent) for part in item[1]
+            ) + '"')
+        elif item[0] == "group":
+            out.append(_ps_group(item, indent))
+        else:
+            out.append(item[1])
+    return "".join(out)
+
+
+def _ps_group(group: tuple, indent: int) -> str:
+    """括弧1つ。直下にパイプがあれば開いて中身を字下げし、無ければ1行のまま。"""
+    _, opener, inner, closer = group
+    has_pipe = ("op", "|") in inner
+    # [ ] と、for (…; …; …) のように ; を含む ( ) は開かない
+    if not has_pipe or opener == "[" or (opener == "(" and ("op", ";") in inner):
+        return opener + _ps_inline(inner, indent) + closer
+    body = _ps_block(inner, indent + _PS_INDENT, "\n")
+    return f"{opener}\n{body}\n{' ' * indent}{closer}"
+
+
+def _ps_block(items: list, indent: int, joiner: str) -> str:
+    """文の並び。; は行末に残して joiner で区切り、パイプの2段目以降は1段深く置く。"""
+    statements, _ = _ps_split(items, (";",))
+    out = []
+    for k, statement in enumerate(statements):
+        is_last = k == len(statements) - 1
+        if not _ps_inline(statement, 0).strip():
+            if is_last and k > 0:
+                break  # 末尾が ; で終わっている
+            raise _Unsupported("空の文")
+        elements, chain_ops = _ps_split(statement, ("&&", "||"))
+        lines = []
+        for e, element in enumerate(elements):
+            stages, _ = _ps_split(element, ("|",))
+            for p, stage in enumerate(stages):
+                stage_indent = indent + (_PS_INDENT if p else 0)
+                text = _ps_inline(stage, stage_indent).strip()
+                if not text:
+                    raise _Unsupported("空のパイプ段")
+                if p < len(stages) - 1:
+                    text += " |"
+                elif e < len(chain_ops):
+                    text += f" {chain_ops[e]}"
+                lines.append(" " * stage_indent + text)
+        out.append("\n".join(lines) + ("" if is_last else ";"))
+    return joiner.join(out)
+
+
+def format_powershell_command(command: str) -> str:
+    """通知のコマンド欄用に、PowerShell のワンライナーを意味を変えずに複数行へ整形する。
+
+    変えるのは空白と改行だけ。; は行末に残して空行で区切り、パイプは | を行末に残して段ごとに分ける。
+    パイプを含む括弧（( ) $( ) @( ) { } @{ }）は開いて中身を字下げする。"…" の中の $( ) も同じ。
+    解析できない書き方や、空白以外が変わってしまった場合は元のまま返す。
+    """
+    try:
+        formatted = _ps_block(_parse_powershell(command), 0, "\n\n")
+    except _Unsupported:
+        return command
+    # 念のため、空白以外が1文字も変わっていないことを確かめる
+    if _WHITESPACE_RE.sub("", formatted) != _WHITESPACE_RE.sub("", command):
+        return command
+    return formatted
+
+
+# コマンド欄に出すツール → 整形する関数
+COMMAND_FORMATTERS = {
+    "Bash": format_command,
+    "PowerShell": format_powershell_command,
+}
 
 
 def sync_inputs_hash() -> str:
@@ -895,9 +1091,9 @@ def notify(event: str, payload: dict) -> None:
         "--title", title,
         "--bundle-id", host_bundle_id(),
     ]
-    bash = bash_command(event, payload)
-    if bash is not None:
-        description, command = bash
+    shell = shell_command(event, payload)
+    if shell is not None:
+        description, command = shell
         args += ["--description", description, "--command", command]
     elif markdown:
         args += ["--markdown", markdown]
@@ -929,7 +1125,7 @@ def reading_text(event: str, payload: dict) -> str:
     )
     if markdown:
         return markdown
-    command = bash_command(event, payload)
+    command = shell_command(event, payload)
     if command:
         return "\n".join(command)
     tool_input = payload.get("tool_input")

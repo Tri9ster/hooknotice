@@ -23,6 +23,8 @@
   - 2026-10-04 に Hook のコマンドを `python3` → `python` → `py -3` の順に試す形にした（F-23、未検証）。実機で確かめる:
     出なかった環境の Git Bash で3つのどれが動くか、準備の確認ダイアログが出るか、「pip で準備する」で通知が出るか、
     Python が無いときに起動時の `systemMessage` が出るか、Hook が Windows PowerShell 5.1 で動く環境（`||` が使えない）があるか
+  - 2026-10-04 に PowerShell のコマンドの整形（`format_powershell_command`）を足した（未検証）。実機で確かめる:
+    許可待ちの `tool_name` が `PowerShell` か、コマンド欄の見た目、整形後のコマンドを PowerShell 5.1 / 7 が元と同じに解釈するか
   - Consolas 11px の1文字幅を実測し、`COMMAND_CHAR_WIDTH_PX` を OS 別にする
   - 通知表示でフォーカスを奪わないか、タスクバーにボタンが出ないか（`Qt.Tool` / `WA_ShowWithoutActivating` の検討）
   - 本体クリックでの発火元アプリの前面化（Windows は前面化の制限が強い）
