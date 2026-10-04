@@ -21,5 +21,5 @@ CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" "${CLAUDE_PLUGIN_DATA}/venv/Scripts/p
 ```
 
 - On success, only tell the user (in their language) that the hooknotice settings window is open and that saved changes apply from the next notification.
-- If the error says the Python in `venv` does not exist, tell the user that setup is not done yet: restart Claude Code and choose "Run" in the "hooknotice setup" dialog. Do not run `uv sync` yourself.
+- If the error says the Python in `venv` does not exist, tell the user that setup is not done yet: restart Claude Code and choose "Run" (or "Set up with pip" if uv is not installed) in the "hooknotice setup" dialog. Do not run `uv sync` or `pip` yourself.
 - If the settings window is already open, do not open another one (tell the user to use the existing window).

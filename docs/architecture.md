@@ -10,7 +10,7 @@ macOS 用のツールです（Windows は対応コードのみで未検証）。
 | 要素 | 役割 | 依存 |
 | --- | --- | --- |
 | プラグインの `hooks/hooks.json` | Claude Code から `hook_notify.py` を呼ぶ（`${CLAUDE_PLUGIN_ROOT}` で本体の場所を指す） | — |
-| `hook_notify.py` | Hook のペイロードを読み、ウィンドウを起動する薄いアダプタ。許可待ちでは回答を待って Claude Code に返す | 標準ライブラリのみ（システムの `python3` で動く） |
+| `hook_notify.py` | Hook のペイロードを読み、ウィンドウを起動する薄いアダプタ。許可待ちでは回答を待って Claude Code に返す | 標準ライブラリのみ（システムの Python で動く。`python3` → `python` → `py -3` の順に試す） |
 | `notify_window.py` | 通知ウィンドウ本体。通知1件につき1プロセス | PySide6（パッケージは `PySide6-Essentials`。`uv` で管理する venv。プラグインなら `<DATA>/venv`） |
 | `hooknotice_config.py` / `config.json`（プラグインなら `<DATA>/config.json`） | 設定（通知の横幅、コマンドを改行する文字数、場面ごとのオン/オフ）の読み書きと、通知する場面の一覧（`SCENES`） | 標準ライブラリのみ |
 | `messages.py` | 画面・ダイアログの文言と Claude に返す拒否の理由の辞書（`ja` / `en`）と、使う言語の決定（`tr` / `language`） | 標準ライブラリのみ |
@@ -19,7 +19,12 @@ macOS 用のツールです（Windows は対応コードのみで未検証）。
 
 `hook_notify.py` を標準ライブラリだけで書いているのは、Claude Code がどの Python で Hook を起動しても
 動くようにするためです。PySide6 が要るのはウィンドウ側だけで、venv の `bin/python3` を絶対パスで起動します
-（venv が無いときや依存が更新されたときは、`uv sync --frozen` を実行してよいかを OS のダイアログで確認する。自動では実行しない）。
+（venv が無いときや依存が更新されたときは、`uv sync --frozen` を実行してよいかを OS のダイアログで確認する。自動では実行しない。
+uv が無いときは、Hook を動かしている Python の `venv` と `pip` で準備することもダイアログから選べる）。
+
+Hook の起動に使う Python の名前は OS や入れ方で違う（macOS は `python3`、Windows の python.org 版は `python` と `py`）。
+ラッパーのスクリプトは置かず、`hooks.json` のコマンドを `python3 ... || python ... || py -3 ... || true` とつないでいる。
+`hook_notify.py` は常に exit 0 で終わるので、次の候補へ進むのは起動できなかったときだけで、二重に動くことはない。
 
 プラグインの本体（`CLAUDE_PLUGIN_ROOT`、`~/.claude/plugins/cache/hooknotice/hooknotice/<版>/`）は更新のたびに別のフォルダに
 入れ替わるため、書き込むもの（venv と `config.json`）は更新しても残る `CLAUDE_PLUGIN_DATA`

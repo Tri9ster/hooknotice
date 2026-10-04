@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-10-04: Windows の Python の名前の違いと、uv が無いときの準備
+
+### 目的
+- Windows で、uv が無い環境では準備の確認ダイアログすら出ない。環境によって `python3.exe` か `python.exe` かが違う（F-23）。
+
+### 決めたこと
+- `hooks.json` のコマンドを `python3 ... || python ... || py -3 ... || true` とつなぐ。ラッパーのスクリプトは足さない
+  （macOS は最初の `python3` で終わり、今と同じ速さ。`hook_notify.py` は常に exit 0 なので二重に動かない）。
+- Python がどれも無いときは、`SessionStart` だけ末尾の `echo` で `systemMessage` を返して知らせる。Python が無いと
+  `messages.py` を使えないので、この1文は英語の固定文。
+- uv が無いときのダイアログのボタンを「今後確認しない / 手順をコピー / pip で準備する」にした（`ask_dialog` は3個まで。
+  「閉じる」はダイアログを閉じる操作で足りる）。「pip で準備する」は `run_pip_setup` で `sys.executable -m venv` と
+  `<venv の Python> -m pip install` を実行する。
+- pip で作った venv には印ファイルを置かない（従来の約束どおり、更新を確認しない）。以前 uv で作った印が残っていれば消す。
+  失敗したときは、今回作った venv を消す（venv の Python だけ残ると「準備済み」とみなされ、確認が出なくなるため）。
+- 手順の表示は `python3` / `py -3` の決め打ちをやめ、`sys.executable` と venv の Python のパスを差し込む。
+- `plugin.json` の version を 0.1.4 に上げた。
+
+### 分かったこと
+- 手元の macOS で、`hooks.json` のコマンドを bash で実行して確かめた。`python3` がある・`python` だけ・失敗して終わる
+  `python3` / `python`（Store の入口の代わり）と `py`・どれも無い、の4通りで、標準入力のペイロードは動いた候補に届き、
+  終了コードは常に 0、どれも無いときの `SessionStart` は `systemMessage` の JSON を出した。
+- `run_pip_setup` を一時フォルダで実行し、成功（Python 3.9 で PySide6 6.10.3 が入る）と、失敗（存在しないパッケージ。
+  venv が消え `needs_sync` が真のまま）を確かめた。ダイアログの表示そのものは確かめていない（本文の組み立てだけ）。
+- Windows 実機では未確認。原因も推定で、`||` が使えない Windows PowerShell 5.1 で Hook が動く環境があるかも分からない
+  （TODO）。
+
+---
+
 ## 2026-10-03（2回目）: 設定画面の文字の見切れを直す
 
 ### 目的

@@ -117,17 +117,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         # 準備（uv sync）の確認ダイアログ
         "setup.title": "hooknotice の準備",
         "setup.decline": "今後確認しない",
-        "setup.close": "閉じる",
         "setup.copy_steps": "手順をコピー",
         "setup.not_now": "今はしない",
         "setup.run": "実行する",
+        "setup.run_pip": "pip で準備する",
         "setup.need_library": "通知ウィンドウを出すには、必要なライブラリ（PySide6-Essentials）のインストールが必要です。",
         "setup.updated": "依存ライブラリ（pyproject.toml / uv.lock）が更新されています。",
-        "setup.uv_missing": "{need}\nuv が見つかりませんでした。次のどちらかで入れてください。\n\n{steps}",
+        "setup.uv_missing": "{need}\nuv が見つかりませんでした。「{run_pip}」を選ぶと、下の pip の手順をこの場で実行します"
+                            "（PyPI からダウンロードします）。\n\n{steps}",
         "setup.confirm": "{reason}\n次のコマンドを実行してよいですか？（PyPI からダウンロードします）\n\n"
                          "{command}",
         "setup.done": "準備が完了しました。次の通知から表示されます。",
-        "setup.failed": "uv sync に失敗しました。出力を確認してください:\n{log}",
+        "setup.failed": "準備に失敗しました。出力を確認してください:\n{log}",
         "setup.exit_code": "終了コード: {code}",
         "setup.steps_mac": "【uv を入れる（推奨）】ターミナルで次のどれか:\n"
                            "  curl -LsSf https://astral.sh/uv/install.sh | sh\n"
@@ -135,14 +136,14 @@ MESSAGES: dict[str, dict[str, str]] = {
                            "  pip3 install uv\n"
                            "  入れた後、Claude Code を起動し直すと、もう一度確認します。\n\n"
                            "【uv を使わずに pip で入れる】\n"
-                           "  python3 -m venv \"{venv}\"\n"
-                           "  \"{venv}/bin/pip\" install \"{req}\"",
+                           "  \"{python}\" -m venv \"{venv}\"\n"
+                           "  \"{venv_python}\" -m pip install \"{req}\"",
         "setup.steps_win": "【uv を入れる（推奨）】PowerShell で:\n"
                            "  powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"\n"
                            "  入れた後、Claude Code を起動し直すと、もう一度確認します。\n\n"
-                           "【uv を使わずに pip で入れる】\n"
-                           "  py -3 -m venv \"{venv}\"\n"
-                           "  \"{venv}\\Scripts\\pip\" install \"{req}\"",
+                           "【uv を使わずに pip で入れる】コマンド プロンプトで:\n"
+                           "  \"{python}\" -m venv \"{venv}\"\n"
+                           "  \"{venv_python}\" -m pip install \"{req}\"",
         # Windows の MessageBox に書き添えるボタンの対応（{0} から順にボタンの名前）
         "dialog.hint2": "（OK = {1} / キャンセル = {0}）",
         "dialog.hint3": "（はい = {2} / いいえ = {1} / キャンセル = {0}）",
@@ -301,17 +302,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "explain.start_failed": "Could not start claude",
         "setup.title": "hooknotice setup",
         "setup.decline": "Don't ask again",
-        "setup.close": "Close",
         "setup.copy_steps": "Copy steps",
         "setup.not_now": "Not now",
         "setup.run": "Run",
+        "setup.run_pip": "Set up with pip",
         "setup.need_library": "To show notification windows, hooknotice needs a library (PySide6-Essentials) to be installed.",
         "setup.updated": "The dependencies (pyproject.toml / uv.lock) have been updated.",
-        "setup.uv_missing": "{need}\nuv was not found. Install it in one of the following ways.\n\n{steps}",
+        "setup.uv_missing": "{need}\nuv was not found. Choose \"{run_pip}\" to run the pip steps below right now "
+                            "(it downloads packages from PyPI).\n\n{steps}",
         "setup.confirm": "{reason}\nRun the following command? (It downloads packages from PyPI.)\n\n"
                          "{command}",
         "setup.done": "Setup is complete. Notifications will appear from the next one.",
-        "setup.failed": "uv sync failed. Check the output:\n{log}",
+        "setup.failed": "Setup failed. Check the output:\n{log}",
         "setup.exit_code": "Exit code: {code}",
         "setup.steps_mac": "[Install uv (recommended)] Run one of these in a terminal:\n"
                            "  curl -LsSf https://astral.sh/uv/install.sh | sh\n"
@@ -319,14 +321,14 @@ MESSAGES: dict[str, dict[str, str]] = {
                            "  pip3 install uv\n"
                            "  After installing, restart Claude Code and hooknotice will ask again.\n\n"
                            "[Install with pip instead of uv]\n"
-                           "  python3 -m venv \"{venv}\"\n"
-                           "  \"{venv}/bin/pip\" install \"{req}\"",
+                           "  \"{python}\" -m venv \"{venv}\"\n"
+                           "  \"{venv_python}\" -m pip install \"{req}\"",
         "setup.steps_win": "[Install uv (recommended)] In PowerShell:\n"
                            "  powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"\n"
                            "  After installing, restart Claude Code and hooknotice will ask again.\n\n"
-                           "[Install with pip instead of uv]\n"
-                           "  py -3 -m venv \"{venv}\"\n"
-                           "  \"{venv}\\Scripts\\pip\" install \"{req}\"",
+                           "[Install with pip instead of uv] In Command Prompt:\n"
+                           "  \"{python}\" -m venv \"{venv}\"\n"
+                           "  \"{venv_python}\" -m pip install \"{req}\"",
         "dialog.hint2": "(OK = {1} / Cancel = {0})",
         "dialog.hint3": "(Yes = {2} / No = {1} / Cancel = {0})",
         "settings.window_title": "hooknotice settings",

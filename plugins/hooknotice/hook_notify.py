@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -411,7 +412,10 @@ def start_setup() -> None:
 
 def _uv_missing_steps() -> str:
     """uv が無いときに見せる、uv の入れ方と pip で入れる手順。"""
-    return tr("setup.steps_win" if IS_WINDOWS else "setup.steps_mac", venv=VENV_DIR, req=PIP_REQUIREMENT)
+    return tr(
+        "setup.steps_win" if IS_WINDOWS else "setup.steps_mac",
+        python=sys.executable, venv=VENV_DIR, venv_python=VENV_PYTHON, req=PIP_REQUIREMENT,
+    )
 
 
 def _ask_setup(message: str, buttons: list[str], timeout: int = 0) -> str:
@@ -421,7 +425,7 @@ def _ask_setup(message: str, buttons: list[str], timeout: int = 0) -> str:
 
 
 def run_setup() -> int:
-    """--setup の本体。uv sync を実行してよいかをダイアログで聞き、了承されたときだけ実行する。"""
+    """--setup の本体。uv sync（uv が無ければ pip）を実行してよいかをダイアログで聞き、了承されたときだけ実行する。"""
     lock = try_lock(SETUP_LOCK)
     if lock is None:
         return 0  # 別のセッションが確認中・同期中
@@ -430,18 +434,23 @@ def run_setup() -> int:
             return 0
         uv = find_uv()
         decline, copy_steps, run = tr("setup.decline"), tr("setup.copy_steps"), tr("setup.run")
+        reason = tr("setup.updated" if os.path.exists(VENV_PYTHON) else "setup.need_library")
         if not uv:
-            steps = _uv_missing_steps()
+            steps, run_pip = _uv_missing_steps(), tr("setup.run_pip")
             answer = _ask_setup(
-                tr("setup.uv_missing", need=tr("setup.need_library"), steps=steps),
-                [decline, tr("setup.close"), copy_steps],
+                tr("setup.uv_missing", need=reason, run_pip=run_pip, steps=steps),
+                [decline, copy_steps, run_pip],
             )
             if answer == copy_steps:
                 copy_to_clipboard(steps)
             elif answer == decline:
                 SETUP_DECLINED.touch()
+            elif answer == run_pip:
+                if run_pip_setup():
+                    _ask_setup(tr("setup.done"), [tr("button.ok")], timeout=15)
+                else:
+                    _ask_setup(tr("setup.failed", log=SYNC_LOG), [tr("button.ok")])
             return 0
-        reason = tr("setup.updated" if os.path.exists(VENV_PYTHON) else "setup.need_library")
         answer = _ask_setup(
             tr("setup.confirm", reason=reason, command=sync_command()),
             [decline, tr("setup.not_now"), run],
@@ -485,6 +494,51 @@ def run_sync(uv: str) -> bool:
         return False
     with open(SYNC_MARKER, "w", encoding="utf-8") as f:
         f.write(sync_inputs_hash() + "\n")
+    return True
+
+
+def run_pip_setup() -> bool:
+    """uv を使わずに、Hook を動かしている Python で venv を作り、pip で入れる。出力を sync.log に残し、成功したら真を返す。
+
+    印ファイルは置かない（pip で作った venv は更新を確認しない。needs_sync）。
+    """
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}  # 呼び出し元の venv を使わせない
+    existed = os.path.exists(VENV_DIR)
+    os.makedirs(os.path.dirname(VENV_DIR), exist_ok=True)
+    SYNC_LOG.parent.mkdir(parents=True, exist_ok=True)
+    commands = [
+        [sys.executable, "-m", "venv", VENV_DIR],
+        [VENV_PYTHON, "-m", "pip", "install", PIP_REQUIREMENT],
+    ]
+    code = 0
+    with open(SYNC_LOG, "w", encoding="utf-8") as log:
+        for command in commands:
+            log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {' '.join(command)}\n")
+            log.flush()
+            try:
+                code = subprocess.run(
+                    command,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    **popen_flags(detach=False),
+                ).returncode
+            except OSError as e:
+                log.write(f"{e}\n")
+                code = 1
+            if code != 0:
+                break
+        log.write(tr("setup.exit_code", code=code) + "\n")
+    if code != 0 or not os.path.exists(VENV_PYTHON):
+        if not existed:
+            # 作りかけを残すと「準備済み」とみなされ、次から確認が出なくなる
+            shutil.rmtree(VENV_DIR, ignore_errors=True)
+        return False
+    try:
+        os.remove(SYNC_MARKER)  # 以前 uv で作った venv の印。残すと毎回「更新あり」になる
+    except OSError:
+        pass
     return True
 
 

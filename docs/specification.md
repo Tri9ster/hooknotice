@@ -111,8 +111,11 @@ notify_window.py（PySide6・使い捨てプロセス）
       実行し（`VIRTUAL_ENV` は外す。プラグインなら `UV_PROJECT_ENVIRONMENT=<DATA>/venv` を付ける。出力は `sync.log`）、
       成功したら印ファイル（ハッシュ入り）を作って完了を、失敗したら `sync.log` の場所を表示する。ダイアログには実行する
       コマンドをそのまま見せる（`sync_command`）。
-    - uv が無い: uv の入れ方と pip で入れる手順（`python3 -m venv <venv>` → `<venv>/bin/pip install "PySide6-Essentials>=6.7"`）
-      を表示する。ボタンは「今後確認しない / 閉じる / 手順をコピー」（`copy_to_clipboard`）。
+    - uv が無い: uv の入れ方と pip で入れる手順（`<Hook を動かしている Python> -m venv <venv>` →
+      `<venv の Python> -m pip install "PySide6-Essentials>=6.7"`）を表示する。ボタンは
+      「今後確認しない / 手順をコピー（`copy_to_clipboard`） / pip で準備する」。「pip で準備する」は、表示した pip の手順を
+      その場で実行する（`run_pip_setup`。Python は `sys.executable`、出力は `sync.log`）。成功しても印ファイルは置かない
+      （以前 uv で作った印があれば消す）。失敗したときは、今回作った venv を消して次回また確認できるようにする。
     - 「今後確認しない」は `setup.declined` を置き、以後ダイアログを出さない。
   - uv は `platform_support.find_uv()` で探す（環境変数 `HOOKNOTICE_UV` → PATH → よくある置き場所）。
     uv 自体の自動インストールはしない。
@@ -330,7 +333,10 @@ notify_window.py（PySide6・使い捨てプロセス）
 
 プラグインの `plugins/hooknotice/hooks/hooks.json` で以下のHookを登録する（いずれも `type: "command"`, `async: true`）。
 通知するかどうかは hooknotice の設定（`config.json` の `notify`）で決めるため、対象のイベントはすべて登録しておく。
-コマンドは `python3 "${CLAUDE_PLUGIN_ROOT}/hook_notify.py" --event <種別>`。ユーザーのプラグインとして全プロジェクトで有効。
+コマンドは `python3 "${CLAUDE_PLUGIN_ROOT}/hook_notify.py" --event <種別>` を、`python`・`py -3` でも同じ引数で `||` でつなぎ、
+末尾を `|| true` とする（Windows は Python の名前が環境で違うため。`hook_notify.py` は常に exit 0 なので、次へ進むのは
+起動できなかったときだけ。macOS は最初の `python3` で終わる）。`SessionStart` だけは末尾を `|| echo '{"systemMessage": ...}'`
+とし、Python がどれも無いときに Claude Code の画面へ英語の1文を出す。ユーザーのプラグインとして全プロジェクトで有効。
 Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境変数で渡り、`notify_window.py` などにも引き継がれる。
 ただし `PermissionRequest` は決定を返すため `async` を付けず同期で登録し、`timeout: 600` を明記する
 （async の Hook の出力は無視されるため）。
@@ -360,6 +366,14 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
 - トレイメニュー等の設定UIは無い。
 
 ## 8. 変更履歴
+
+### 2026-10-04: Windows の Python の名前の違いと、uv が無いときの準備
+
+- **変更内容**: Hook のコマンドを `python3` → `python` → `py -3` の順に試す形にした（6章）。Python がどれも無いときは、
+  起動時に `systemMessage` で知らせる。uv が無いときの準備ダイアログに「pip で準備する」を足し、「閉じる」ボタンをやめた（4章）。
+  pip の手順は `python3` / `py -3` の決め打ちをやめ、Hook を動かしている Python のパスを表示する。
+- **理由**: Windows で `python3` が無い（`python.exe` だけ、または Microsoft Store の入口だけ）環境では Hook が一度も動かず、
+  準備の確認ダイアログも出なかった。uv が無い環境では、手順を自分で実行するしかなかった。Windows は実機で未確認。
 
 ### 2026-10-03（2回目）: 設定画面の文字の見切れを直す
 
