@@ -1,6 +1,6 @@
 {
   "name": "hooknotice",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Desktop notification windows for Claude Code (macOS). Answer permission requests, questions, and plan approvals from the notification when you are away from the terminal.",
   "author": {
     "name": "Tri9ster"
