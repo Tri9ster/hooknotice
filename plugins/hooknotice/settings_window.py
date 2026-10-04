@@ -66,11 +66,11 @@ class SettingsWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(tr("settings.window_title"))
-        self.setMinimumWidth(520)
         config = load_config()
 
         outer = QVBoxLayout(self)
-        outer.addWidget(self._make_display_group(config))
+        self._display_group = self._make_display_group(config)
+        outer.addWidget(self._display_group)
         outer.addWidget(self._make_sound_group(config))
         outer.addWidget(self._make_scene_group(config), 1)
 
@@ -92,11 +92,32 @@ class SettingsWindow(QWidget):
         outer.addLayout(buttons)
 
         self._saved = self._values()
-        self.resize(560, 720)
+        # 場面の一覧が数件は見える高さにする（画面が低いときは収まる高さまで）
+        available = self.screen().availableGeometry().height()
+        self.resize(600, min(840, available - 60))
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self._fit_display_group()
+
+    def _fit_display_group(self) -> None:
+        """「表示」の高さの下限を、今の幅で折り返した高さに合わせる。
+
+        ウィンドウの高さの下限は折り返す前の幅で計算されるので、何もしないと折り返した補足の行が見切れる。
+        """
+        group = getattr(self, "_display_group", None)
+        if group is None:
+            return
+        margins = self.layout().contentsMargins()
+        height = group.heightForWidth(self.width() - margins.left() - margins.right())
+        if height > 0:
+            group.setMinimumHeight(height)
 
     def _make_display_group(self, config) -> QGroupBox:
         group = QGroupBox(tr("settings.group_display"))
         form = QFormLayout(group)
+        # macOS の既定では入力欄の列が広がらず、折り返す補足が狭い幅に押し込まれる
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         # 言語の名前は、どの言語で表示していても読めるようにそれぞれの言語で書く
         self._language = QComboBox()
@@ -105,10 +126,7 @@ class SettingsWindow(QWidget):
         self._language.setCurrentIndex(max(0, self._language.findData(config.language)))
         language_column = QVBoxLayout()
         language_column.addWidget(self._language, 0, Qt.AlignLeft)
-        language_hint = QLabel(tr("settings.language_hint"))
-        language_hint.setStyleSheet("color: gray;")
-        language_hint.setWordWrap(True)
-        language_column.addWidget(language_hint)
+        language_column.addWidget(_hint_label(tr("settings.language_hint")))
         form.addRow(tr("settings.language"), language_column)
 
         self._width = QSpinBox()
@@ -117,7 +135,10 @@ class SettingsWindow(QWidget):
         self._width.setSuffix(" px")
         self._width.setValue(config.width)
         self._width.valueChanged.connect(self._update_line_limit)
-        form.addRow(tr("settings.width", default=DEFAULT_WIDTH), self._width)
+        width_row = QHBoxLayout()  # 列が広がっても入力欄は伸ばさない
+        width_row.addWidget(self._width)
+        width_row.addStretch(1)
+        form.addRow(tr("settings.width", default=DEFAULT_WIDTH), width_row)
 
         self._auto_limit = QCheckBox(tr("settings.auto_limit"))
         self._line_limit = QSpinBox()
@@ -151,13 +172,12 @@ class SettingsWindow(QWidget):
         self._delay.setRange(*DELAY_RANGE)
         self._delay.setSuffix(tr("settings.seconds_suffix"))
         self._delay.setValue(config.delay_seconds)
-        delay_row = QHBoxLayout()
-        delay_row.addWidget(self._delay)
-        self._delay_hint = QLabel()
-        self._delay_hint.setStyleSheet("color: gray;")
-        self._delay_hint.setWordWrap(True)
-        delay_row.addWidget(self._delay_hint, 1)
-        form.addRow(tr("settings.delay", default=DEFAULT_DELAY_SECONDS), delay_row)
+        # 補足は入力欄の横ではなく下に置く（横だと幅が足りず、折り返した行が見切れる）
+        delay_column = QVBoxLayout()
+        delay_column.addWidget(self._delay, 0, Qt.AlignLeft)
+        self._delay_hint = _hint_label()
+        delay_column.addWidget(self._delay_hint)
+        form.addRow(tr("settings.delay", default=DEFAULT_DELAY_SECONDS), delay_column)
 
         self._reading_cpm = QSpinBox()
         self._reading_cpm.setRange(*READING_CPM_RANGE)
@@ -165,23 +185,18 @@ class SettingsWindow(QWidget):
         self._reading_cpm.setSuffix(tr("settings.cpm_suffix"))
         self._reading_cpm.setValue(config.reading_cpm)
         self._reading_cpm.valueChanged.connect(self._update_delay_widgets)
-        cpm_row = QHBoxLayout()
-        cpm_row.addWidget(self._reading_cpm)
-        self._cpm_hint = QLabel()
-        self._cpm_hint.setStyleSheet("color: gray;")
-        self._cpm_hint.setWordWrap(True)
-        cpm_row.addWidget(self._cpm_hint, 1)
-        form.addRow(tr("settings.cpm", default=DEFAULT_READING_CPM), cpm_row)
+        cpm_column = QVBoxLayout()
+        cpm_column.addWidget(self._reading_cpm, 0, Qt.AlignLeft)
+        self._cpm_hint = _hint_label()
+        cpm_column.addWidget(self._cpm_hint)
+        form.addRow(tr("settings.cpm", default=DEFAULT_READING_CPM), cpm_column)
         self._update_delay_widgets()
 
         self._suppress_focused = QCheckBox(tr("settings.suppress_focused"))
         self._suppress_focused.setChecked(config.suppress_when_focused)
-        suppress_hint = QLabel(tr("settings.suppress_focused_hint"))
-        suppress_hint.setStyleSheet("color: gray;")
-        suppress_hint.setWordWrap(True)
         suppress_column = QVBoxLayout()
         suppress_column.addWidget(self._suppress_focused)
-        suppress_column.addWidget(suppress_hint)
+        suppress_column.addWidget(_hint_label(tr("settings.suppress_focused_hint")))
         form.addRow(tr("settings.suppress_focused_label"), suppress_column)
         return group
 
@@ -194,6 +209,7 @@ class SettingsWindow(QWidget):
             self._delay_hint.setText(tr("settings.delay_hint_fixed"))
         example = -(-300 * 60 // self._reading_cpm.value())  # 切り上げ
         self._cpm_hint.setText(tr("settings.cpm_hint", example=example, max=READING_DELAY_MAX))
+        self._fit_display_group()  # 補足の行数が変わることがある
 
     def _make_sound_group(self, config) -> QGroupBox:
         group = QGroupBox(tr("settings.group_sound"))
@@ -375,6 +391,14 @@ class SettingsWindow(QWidget):
                 event.ignore()
                 return
         event.accept()
+
+
+def _hint_label(text: str = "") -> QLabel:
+    """入力欄の下に置く、灰色で折り返す補足の文言。"""
+    label = QLabel(text)
+    label.setStyleSheet("color: gray;")
+    label.setWordWrap(True)
+    return label
 
 
 def _raw_line_limit() -> int | None:
