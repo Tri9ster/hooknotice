@@ -25,6 +25,8 @@
     Python が無いときに起動時の `systemMessage` が出るか、Hook が Windows PowerShell 5.1 で動く環境（`||` が使えない）があるか
   - 2026-10-04 に PowerShell のコマンドの整形（`format_powershell_command`）を足した（未検証）。実機で確かめる:
     許可待ちの `tool_name` が `PowerShell` か、コマンド欄の見た目、整形後のコマンドを PowerShell 5.1 / 7 が元と同じに解釈するか
+  - PowerShell 整形の残り（issue #12）: 子孫が開かれる `{ }` / `@{ }` 自体も開く（段をそろえる）、
+    `command_line_limit` に収まる短いパイプは1行のままにする、`&&` / `||` の整形が PowerShell 7 で同じ意味か確かめる
   - Consolas 11px の1文字幅を実測し、`COMMAND_CHAR_WIDTH_PX` を OS 別にする
   - 通知表示でフォーカスを奪わないか、タスクバーにボタンが出ないか（`Qt.Tool` / `WA_ShowWithoutActivating` の検討）
   - 本体クリックでの発火元アプリの前面化（Windows は前面化の制限が強い）

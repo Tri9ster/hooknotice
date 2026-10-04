@@ -105,6 +105,8 @@ EXPLAIN_INPUT_MAX_CHARS = 8000
 
 # コマンド欄の整形で、長い要素の先頭から1行ずつに分ける環境変数の代入（NAME=値 / NAME+=値）
 _ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
+# PowerShell が引用符として扱う、ASCII 以外の文字（中の | や ; を演算子と読み違えないよう、あれば整形しない）
+_PS_SMART_QUOTES = "‘’‚‛“”„"
 # PowerShell の整形で、中を再帰して読む括弧（開き → 閉じ）と、1段の字下げ
 _PS_CLOSERS = {"(": ")", "$(": ")", "@(": ")", "{": "}", "@{": "}", "[": "]"}
 _PS_INDENT = 4
@@ -374,6 +376,8 @@ def _parse_powershell(command: str) -> list:
     "…" の部品は、文字列か $( ) の group。文字は元の文字列をそのまま切り出すので、中身は変わらない。
     解析に自信が持てない書き方は _Unsupported を投げる。
     """
+    if any(ch in _PS_SMART_QUOTES for ch in command):
+        raise _Unsupported("スマートクォート")
     n = len(command)
 
     def parse_code(i: int, closer: str) -> tuple[list, int]:
