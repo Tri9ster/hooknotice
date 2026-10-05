@@ -669,6 +669,8 @@ def run_setup() -> int:
 def run_sync(uv: str) -> bool:
     """uv sync --frozen を実行し、出力を sync.log に残す。成功したら印ファイルを作って真を返す。"""
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}  # 呼び出し元の venv を使わせない
+    env.setdefault("UV_NATIVE_TLS", "1")  # OS の証明書ストアを使う（社内 CA で TLS を中継する環境向け。利用者の指定があれば優先）
+    existed = os.path.exists(VENV_DIR)
     if plugin_data_dir():
         env["UV_PROJECT_ENVIRONMENT"] = VENV_DIR  # venv は本体ではなく、更新しても残る DATA に作る
         os.makedirs(os.path.dirname(VENV_DIR), exist_ok=True)
@@ -691,6 +693,9 @@ def run_sync(uv: str) -> bool:
             code = 1
         log.write(tr("setup.exit_code", code=code) + "\n")
     if code != 0 or not os.path.exists(VENV_PYTHON):
+        if not existed:
+            # 作りかけを残すと「準備済み」とみなされ、次から確認が出なくなる
+            shutil.rmtree(VENV_DIR, ignore_errors=True)
         return False
     with open(SYNC_MARKER, "w", encoding="utf-8") as f:
         f.write(sync_inputs_hash() + "\n")
