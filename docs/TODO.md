@@ -36,3 +36,6 @@
   同じアプリ内の別ウィンドウ・タブの区別は未対応。
 - [x] **`uv sync` を忘れた場合の気づきやすさ**
   → 2026-09-27 に、SessionStart で準備が必要なら `uv sync --frozen` を実行してよいかを確認するダイアログを出すようにした。
+- [ ] **TLS インスペクション環境への残りの対応（issue #14）**
+  案 A・B（uv 側）は対応済み。残り: pip 経路の証明書（truststore）、`/hooknotice:setup` スキルの追加（手動で再実行）、
+  失敗ダイアログへの `UnknownIssuer` 時のヒント、settings スキルの `ModuleNotFoundError: PySide6` の案内。
