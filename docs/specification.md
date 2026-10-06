@@ -395,6 +395,11 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
 
 ## 8. 変更履歴
 
+### 2026-10-06: Windows で、ターミナル側で答えた後も通知ウィンドウが残る不具合の修正
+
+- **変更内容**: Hook が通知ウィンドウに `--parent-pid`（Hook 自身の pid）を渡し、ウィンドウはその終了を監視して自動で閉じる。
+- **理由**: Windows の venv の `python.exe` はランチャーのため、ウィンドウの親 pid が Hook にならず、Hook の終了に気づけなかった（issue #16）。
+
 ### 2026-10-05: uv sync の失敗時に作りかけの venv を消す／uv に OS の証明書ストアを使わせる
 
 - **変更内容**: 「実行する」の `uv sync --frozen` が失敗したとき、その実行で新しく作った venv を削除する。`uv sync` には環境変数

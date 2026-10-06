@@ -1056,8 +1056,9 @@ def ask(args: list, payload: dict) -> None:
     表示中にターミナル側で答えられたら、何も出力せずに終了する（ウィンドウはそれに気づいて閉じる）。
     """
     watcher = AnswerWatcher(payload)
+    # Windows の venv の python.exe はランチャーで、ウィンドウの親 pid はランチャーになるため、Hook の pid を明示的に渡す
     proc = subprocess.Popen(
-        args + ["--actions"],
+        args + ["--actions", "--parent-pid", str(os.getpid())],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
