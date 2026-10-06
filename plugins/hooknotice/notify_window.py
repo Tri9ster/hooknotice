@@ -411,6 +411,7 @@ class NotificationWindow(QWidget):
         markdown: str = "",
         plan_actions: bool = False,
         questions: list[dict] | None = None,
+        parent_pid: int = 0,
     ):
         super().__init__()
         self._bundle_id = bundle_id
@@ -429,7 +430,7 @@ class NotificationWindow(QWidget):
         self._explain_markdown = ""  # 表示中の解説。外観の切り替え時に書式を当て直すために持つ
         self._markdown = markdown  # 本文として表示する Markdown（質問・計画の承認待ち）
         self._markdown_view: QTextBrowser | None = None
-        self._parent_pid = os.getppid()
+        self._parent_pid = parent_pid or os.getppid()  # 指定がなければ親プロセス
         self._slot = slot
         self._stack_heights: list[int] | None = None
         self._closing = False
@@ -1017,6 +1018,7 @@ def main() -> int:
     parser.add_argument("--markdown", default="")
     parser.add_argument("--plan-actions", action="store_true")
     parser.add_argument("--questions", default="")  # 選択肢の質問の JSON（hook_notify.question_choices）
+    parser.add_argument("--parent-pid", type=int, default=0)  # 回答を待つ Hook の pid（hook_notify.ask）
     args, _unknown = parser.parse_known_args()
 
     app = QApplication(sys.argv[:1])
@@ -1035,6 +1037,7 @@ def main() -> int:
         markdown=args.markdown,
         plan_actions=args.plan_actions,
         questions=_parse_questions(args.questions),
+        parent_pid=args.parent_pid,
     )
     slot.acquire(window.height())
     app.aboutToQuit.connect(slot.release)

@@ -4,6 +4,21 @@
 
 ---
 
+## 2026-10-06: Windows で VS Code 側の回答後に通知ウィンドウが残る不具合（issue #16）
+
+### 目的
+- 許可待ちにターミナル側で答えても、通知ウィンドウが閉じずに残る不具合を直す。
+
+### 決めたこと
+- `hook_notify.ask()` が自分の pid を `--parent-pid` で渡し、`notify_window.py` はそれを優先して監視する。指定がなければ従来どおり `os.getppid()`。
+- 利用者に届けるため、`plugin.json` の version を 0.1.8 に上げた。
+
+### 分かったこと
+- Windows の venv の `Scripts\python.exe` はランチャーで、ウィンドウの親 pid がランチャーになる。ランチャーはウィンドウが終わるまで生きるため、`parent_exited()` が常に偽だった。
+- Linux 上では構文チェックのみ。Windows・macOS の実機での確認は手元で必要（issue 報告者は同等の修正で Windows の動作を確認済み）。
+
+---
+
 ## 2026-10-05: uv sync 失敗時の作りかけ venv と TLS インスペクション対策（issue #14 の案 A・B）
 
 ### 目的
