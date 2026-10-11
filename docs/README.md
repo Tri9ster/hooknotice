@@ -11,6 +11,7 @@ hooknotice の保守・改修をする人向けの技術資料です。使い方
 | [failures.md](failures.md) | 失敗・つまずきの記録（症状、原因、対処、教訓） |
 | [specification.md](specification.md) | 仕様書（外部から見た動作と変更履歴） |
 | [TODO.md](TODO.md) | 後で検討すること |
+| [notes/](notes/) | 検証の記録（計測の条件・結果・考察・使ったコードを1件ずつ。ファイル名は `YYYYMMDD_<題名>.md`） |
 
 ## 書き方の約束
 
