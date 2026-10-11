@@ -24,9 +24,12 @@
 ### 割り切り事項
 
 - ウィンドウ表示時にフォーカスは奪わない（`activate()` を呼ばないため、前面に出るが
-  キーボードフォーカスは移らない）。
+  キーボードフォーカスは移らない）。入力欄をクリックしたときに初めてフォーカスが移る。
+- 入力欄に書いている途中でも、ターミナル側で先に回答された・Hook がタイムアウトした場合は通知が閉じ、入力は破棄される。
+- 設定画面を開いたまま通知の 🔕 で場面をオフにすると、あとで設定画面の「保存」を押した時点で、設定画面の内容で上書きされる。
 - 通知音は1回のみ再生（繰り返し再生なし）。
 - 発火元の特定はアプリ単位（同一アプリの複数ウィンドウ/タブは区別しない）。
+- 通知を出すディスプレイは名前で選ぶ。同じ名前のディスプレイが2台あると、最初に見つかった1台になる。
 - 許可待ちの Hook は同期実行だが、Claude Code（VS Code 拡張で確認）の許可ダイアログは
   Hook の完了を待たず通知と同時に表示され、どちらで回答してもよい（2026-09-24 実機確認）。
   ターミナル側で先に回答しても Claude Code は Hook を終了させない（2026-09-27 実機確認）。そのため Hook が
@@ -35,7 +38,7 @@
 - 「このセッション中は常に許可」相当の回答（`updatedPermissions`）には対応しない。
 - 「解説」は押すたびに Claude（Sonnet）を1回呼ぶため、Claude の利用枠を消費し、生成に10〜15秒ほどかかる。
   claude の実行ファイルが見つからない環境では解説ボタンを出さない。
-- トレイメニュー等の設定UIは無い。カスタマイズは `notify_window.py` の定数を直接編集する。
+- トレイメニューは無い。設定は設定画面（4章）か `config.json` で変える。
 
 ## 3. 処理の流れ
 
@@ -178,12 +181,16 @@ notify_window.py（PySide6・使い捨てプロセス）
   - いずれも取れなければ `cwd`。前後の空白だけを除き、省略や改行の削除は行わない。
 - 許可待ち（`ACTION_EVENTS` = `permission_request`）は `--actions` 付きでウィンドウを起動して終了を待ち、
   その stdout を `permission_decision` で PermissionRequest の決定 JSON に変換して出力する
-  （`allow` → `behavior: "allow"`、`deny` → `behavior: "deny"` と `message`: `DENY_MESSAGE`、
+  （`allow` → `behavior: "allow"`、`deny` → `behavior: "deny"` と `message`: `tr("deny.permission")`、
   それ以外は出力なし＝通常フロー）。
+  入力欄にメッセージを書いて拒否した結果 `deny {"message": 入力}`（`DENY_PREFIX` + JSON）は、`message` を
+  `tr("deny.permission_feedback", message=入力)`（計画は `deny.plan_feedback`）にして返す。JSON の形が崩れている・
+  空白だけのときは、固定の文言で拒否する。
 - 選択肢の質問（`QUESTION_TOOL` = `AskUserQuestion`）は、`question_choices` で質問ごとの選択肢
   （`question` / `header` / `multiSelect` / `labels`）を JSON にして `--actions --questions` で起動する。
   結果が `answers {質問文: 選んだ選択肢}` なら、元の `tool_input` に `answers` を足した `updatedInput` と
   `behavior: "allow"` を返し、質問を出さずに回答済みとして進める（複数選択はカンマ区切り）。
+  `answers` の値は選択肢のラベルに限らず、入力欄の自由記述（改行を含んでよい）もそのまま入れる。
   `dismiss` は出力なし（ターミナルで答える）。キャンセルボタンは出さない（拒否すると質問自体が失敗するため）。
   選択肢の無い質問が1つでもあるなど選択肢を組み立てられない場合は、`NO_ACTION_TOOLS` として
   ボタン無しの通知を切り離して表示するだけにする。
@@ -193,7 +200,8 @@ notify_window.py（PySide6・使い捨てプロセス）
   - `plan_auto` → `auto`、`plan_accept_edits` → `acceptEdits`、`plan_default` → `default`（いずれも `behavior: "allow"`）。
     ExitPlanMode は allow だけでは採用されないため、Hook に渡された `tool_input`（`plan` / `planFilePath`）を
     そのまま `updatedInput` として付ける
-  - `deny`（計画を続ける）→ `behavior: "deny"` と `message`: `PLAN_DENY_MESSAGE`
+  - `deny`（計画を続ける）→ `behavior: "deny"` と `message`: `tr("deny.plan")`。入力欄に修正の指示があれば
+    `deny {"message": 入力}` で届き、`tr("deny.plan_feedback", message=入力)` を返す
   - `dismiss` → 出力なし（ターミナルの承認ダイアログで答える）
 - この2つの本文は、`tool_input` の JSON ではなく `tool_markdown` が組み立てた Markdown を `--markdown` で渡す
   （組み立てられなければ従来の `--body`）。タイトルも `TOOL_TITLES` で変える。
@@ -252,13 +260,15 @@ notify_window.py（PySide6・使い捨てプロセス）
 | --- | --- | --- | --- |
 | `language` | `auto` | `auto` / `ja` / `en` | `messages.py`（表示の言語。下の「多言語対応」） |
 | `explain` | `{"model": "sonnet", "effort": "low"}` | `effort` は `low` / `medium` / `high` / `xhigh` / `max`（不正なら `low`）。`model` は空でない文字列 | `notify_window.py` の解説の起動（設定画面は無し） |
+| `screen` | `""`（主ディスプレイ） | ディスプレイの名前（`QScreen.name()`） | `notify_window.py` の `_target_screen` |
 | `width` | 600 | 280〜800（px） | `notify_window.py` の `WIDTH` |
 | `command_line_limit` | `null`（自動） | 20〜200（文字） | `hook_notify.py` の `format_command` |
-| `notify` | `NOTIFY_DEFAULTS` | 場面ごとの bool | `hook_notify.py` の `main`（`Config.enabled`） |
+| `notify` | `NOTIFY_DEFAULTS` | 場面ごとの bool | `hook_notify.py` の `main`（`Config.enabled`）。通知の 🔕 でも書き換える |
 | `sound` | `enabled: true`、`source: "system"`、`system`: OS の既定、`file: ""` | — | `notify_window.py`（`Config.sound_path`） |
 | `delay_seconds` | 6 | 0〜60（秒） | `hook_notify.py` の `main`（放置の判定）。`reading` のときは最低の待ち時間 |
 | `delay_mode` | `fixed` | `fixed` / `reading` | `Config.delay_for`（待ち時間の決め方） |
 | `suppress_when_focused` | `false` | bool | `hook_notify.py` の `main`（`host_app_focused`） |
+| `click_shrink_animation` | `true` | bool | `notify_window.py` の `_animate_close`（閉じるときに縮めるか） |
 | `reading_cpm` | 600 | 100〜3000（文字/分） | `Config.delay_for`（`reading` のときの読む速さ） |
 
 場面の一覧（キー・既定・分類）は `hooknotice_config.SCENES` に1か所で定義し、Hook と設定画面の両方が使う。
@@ -268,10 +278,14 @@ notify_window.py（PySide6・使い捨てプロセス）
 
 ### 設定画面（`settings_window.py`）
 
-- PySide6。「表示」（言語、横幅、改行する文字数と「幅に合わせて自動」、待ち時間、アプリが前面のときは通知しない）と「通知する場面」（`SCENES` を分類ごとにチェックボックスで）。
+- PySide6。3つのタブ（`QTabWidget`）で、順に「通知する場面」「表示」「通知音」。場面の一覧はタブの高さをすべて使い、
+  収まらない分はスクロールする。「テスト通知」「閉じる」「保存」はタブの外（下）に置き、どのタブからも押せる。
+- 「表示」（言語、通知を出すディスプレイ、横幅、改行する文字数と「幅に合わせて自動」、待ち時間、アプリが前面のときは通知しない、閉じるときに縮めるアニメーション）と「通知する場面」（`SCENES` を分類ごとにチェックボックスで）。
+- 通知を出すディスプレイは、「主ディスプレイ」と、つながっている各ディスプレイ（「名前（幅×高さ）」）から選ぶ。
+  設定されたディスプレイがつながっていないときは「名前（未接続）」の項目を足して選んだ状態にする（保存しても設定が消えない）。
 - 「通知音」: 鳴らすか、システムの音（`list_system_sounds` の一覧、フォルダを OS ごとに表示）か任意の音声ファイル
   （`QFileDialog`、`SOUND_FILE_SUFFIXES` で絞る）か。「試聴」で `play_sound`。任意のファイルが無いと保存しない。
-- 補足の文言は入力欄の下に折り返して表示する。ウィンドウの幅の下限は文言の長さで決まり（日本語 604px、英語 711px）、
+- 補足の文言は入力欄の下に折り返して表示する。ウィンドウの幅の下限は文言の長さで決まり（offscreen の実測で日本語 561px、英語 677px）、
   初期の大きさは 600×840（幅は下限まで広がる。画面が低いときは収まる高さまで）。
 - 「保存」で `save_config`。「テスト通知」は保存してから `notify_window.py` でサンプルを出す。未保存で閉じると確認する。
 - 起動元: 通知のタイトル行の ⚙（`notify_window._open_settings`、切り離して起動。`CLAUDE_PLUGIN_DATA` は環境変数で引き継ぐ）と、
@@ -298,7 +312,22 @@ notify_window.py（PySide6・使い捨てプロセス）
 
 ## 5. `notify_window.py` の仕様
 
-- 引数 `--title` / `--body` / `--description` / `--command` / `--bundle-id` / `--actions` / `--explain-input` / `--markdown` / `--plan-actions` / `--questions`。
+- 引数 `--title` / `--body` / `--description` / `--command` / `--bundle-id` / `--actions` / `--explain-input` / `--markdown` / `--plan-actions` / `--questions` / `--parent-pid` / `--scene`。
+- `--scene`: 設定の `notify` のキー（`hook_notify.scene_key`）。あればタイトル行の ⚙ の左に 🔕 を出す。押すと
+  `QMessageBox`（親なし・最前面）で「「<`scene.<key>.label`>」の通知をオフにしますか？」と確認し、OK なら
+  `save_config({"notify": {<key>: false}})` で設定を書き換える（一覧に無いキーは、キーをそのまま表示する）。
+  保存後、`--actions` の無い通知は閉じ、`--actions` 付きの通知は 🔕 だけを消して残す（今回の分はそのまま答えられる）。
+  保存に失敗したら理由を表示して何も変えない。設定画面のテスト通知のように `--scene` が無い通知には 🔕 を出さない。
+- 入力欄（`QPlainTextEdit`、`--actions` のとき）: `INPUT_LINES`（3）行ぶんの高さで、長い入力はスクロールする。
+  Enter は改行。フォーカスは `Qt.ClickFocus`（クリックするまで取らない）。
+  - 許可待ち・計画の承認: ボタン行の上に1つ。`deny`（キャンセル・計画を続ける）のとき、空でなければ結果を
+    `deny ` に続けて `{"message": 入力}` の JSON にして1行で出力する。それ以外のボタンでは使わない。
+    入力欄に書かれている間は、送られるボタンの文言を「メッセージを送って拒否」（計画は「メッセージを送って計画を続ける」）に変え、
+    入力欄の下に「「OK」を押すと、このメッセージは送られません」（計画は承認のボタン）と出す。空に戻すと元に戻る。
+    届いたメッセージは Claude Code 上ではツールの拒否の理由として扱われ、利用者の発言としては表示されない。
+  - 選択肢の質問: 質問ごとに、選択肢の下に1つ。単一選択は「あとから操作したほう」を回答にする
+    （入力すると選択肢のチェックを外す。選択肢を選ぶと入力欄は使わない扱いにして、文字を薄く表示する）。
+    `multiSelect` は、選んだ選択肢に入力をカンマ区切りで足す。
 - `--markdown`: 本文ラベルの代わりに Markdown の本文欄（`QTextBrowser`、解説欄と同じ見た目と整形）を表示する。
   クリックはコマンド欄と同じく本体クリック扱い（発火元アプリを前面化して閉じる）で、ホイールでスクロールできる。
   画面に収まらない場合は最小 `EXPLAIN_MIN_HEIGHT` まで縮めてスクロールさせる。
@@ -311,8 +340,8 @@ notify_window.py（PySide6・使い捨てプロセス）
   （「計画を続ける」`deny`・「都度確認で承認」`plan_default`・「編集を自動許可で承認」`plan_accept_edits`・
   「自動モードで承認」`plan_auto`）。「解説」ボタンは出さない。
 - `--questions`（`--actions` と併用）: 質問ごとに見出し（`header`、無ければ質問文）と、選択肢のトグルボタンを
-  縦に並べる。単一選択は `QButtonGroup` の排他、`multiSelect` は複数オン可。すべての質問で1つ以上選ぶと
-  「回答する」が押せるようになり、`answers ` に続けて `{質問文: 選択肢}` の JSON を1行で出力して閉じる。
+  縦に並べる。単一選択は `QButtonGroup` の排他、`multiSelect` は複数オン可。すべての質問で1つ以上選ぶか入力欄に書くと
+  「回答する」が押せるようになり、`answers ` に続けて `{質問文: 回答}` の JSON を1行で出力して閉じる。
   JSON の形が崩れていればボタン無しの表示にする。
 - 「解説」ボタン: `--explain-input` があり、claude の実行ファイル（`CLAUDE_CODE_EXECPATH` → PATH 上の `claude`
   の順に探す）が見つかる場合のみ、ボタン行の左端に出す。押すと `QProcess` で非同期に
@@ -337,7 +366,7 @@ notify_window.py（PySide6・使い捨てプロセス）
   「画面の利用可能な高さ − 2×`MARGIN`」を最大とする。最大を超える場合はコマンド欄をスクロールさせる
   （省略はしない）。コマンド欄の上でのクリックも本体クリックとして扱う（ホイールでのスクロールは可能）。
 - ウィンドウ: フレームレス・角丸・常に最前面（`Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint`）。
-  `Qt.Tool` を指定し、通知1件=1プロセスでもDockアイコンが乱立しないようにしている。
+  `Qt.Tool` は使わない（別プロセスの複数通知で、最前面の重なり順が不安定になったため）。
 - 背景: `QLinearGradient` による2色のアニメーションするグラデーション。色相・角度に
   ランダムなジッターを加え、通知ごとに微妙に見た目が変わる。
 - 配色: macOS の外観設定（`QApplication.styleHints().colorScheme()`）に従い、`THEMES` の
@@ -345,8 +374,12 @@ notify_window.py（PySide6・使い捨てプロセス）
   文字やボタンの色（`STYLE_SHEET` に差し込む）をテーマごとに持つ。`light` では輪郭が白い背景に
   溶けないよう薄い縁取りを描く。表示中に外観が切り替わった場合も `colorSchemeChanged` で追従する。
 - 閉じるボタン、またはウィンドウ本体クリックで閉じる（`--actions` のときは閉じるボタンのみ）。どちらも中心を保ったまま
-  `CLICK_SHRINK_RATIO`（94%）まで `CLICK_ANIMATION_MS`（120ms）かけて縮むアニメーションの後に閉じる。
+  `CLICK_SHRINK_RATIO`（94%）まで `CLICK_ANIMATION_MS`（120ms）かけて縮むアニメーションの後に閉じる
+  （設定の `click_shrink_animation` が false なら、縮めずにすぐ閉じる）。
   本体クリック時のみ、アニメーション完了後に発火元アプリを `osascript` で前面化する。
+- ディスプレイ: 設定の `screen` と名前が一致するディスプレイ（`_target_screen`）の右下に出す。空・見つからない
+  （外したときなど）ときは主ディスプレイ（`primaryScreen()`）。設定は書き換えないので、つなぎ直すと元のディスプレイに戻る。
+  高さの上限とスタック配置は、このディスプレイの `availableGeometry()` で計算する。
 - スタック配置: `~/Library/Application Support/hooknotice/stack_state.json` に
   表示中の通知を到着順に `[{"pid": <pid>, "height": <高さ>}, ...]` で保持し、`fcntl.flock` で
   排他制御する（`height` の無い旧形式は `HEIGHT` とみなす）。起動時に末尾へ追加し、最新の通知から自分までの
@@ -391,9 +424,22 @@ Hook のプロセスには `CLAUDE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_DATA` が環境
 
 - Windows / Linux は非対応。
 - Cline / Roo Code は対象外。
-- トレイメニュー等の設定UIは無い。
+- トレイメニューは無い（設定は設定画面で行う）。
 
 ## 8. 変更履歴
+
+### 2026-10-11: 縮小アニメーションの設定・通知をオフにするボタン・入力欄（0.1.9）
+
+- **変更内容**:
+  - 設定 `click_shrink_animation`（既定 true、設定画面のチェックボックス）を追加した。false のとき、通知を縮めずにすぐ閉じる（5章）。
+  - Hook が通知ウィンドウに `--scene`（設定の `notify` のキー）を渡し、タイトル行に 🔕 を出す。確認のうえ、その場面の通知をオフにする（5章）。
+  - 許可待ち・計画の承認・選択肢の質問に、複数行の入力欄を足した。拒否のメッセージは `deny {"message": …}`、
+    質問の自由記述は `answers` の値として返す（4章・5章）。
+  - 設定画面を3つのタブ（通知する場面・表示・通知音）に分けた（4章）。
+  - 設定 `screen`（既定は主ディスプレイ、設定画面の「表示」タブ）を追加した。複数のディスプレイがあるとき、通知を出す
+    ディスプレイを選べる。見つからないときは主ディスプレイに出し、設定は書き換えない（4章・5章）。
+- **理由**: アニメーションを好みで切れるようにするため。設定画面は、場面の一覧が下の狭い枠に押し込まれて見渡しにくかったため。不要な種類の通知を、設定画面で探さずにその場で止めるため。
+  自由記述のたびに通知を閉じてターミナル側で答える手間を無くすため。
 
 ### 2026-10-06: Windows で、ターミナル側で答えた後も通知ウィンドウが残る不具合の修正
 

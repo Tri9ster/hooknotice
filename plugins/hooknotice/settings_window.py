@@ -37,7 +37,7 @@ from platform_support import (
     use_utf8_stdio,
 )
 
-from PySide6.QtCore import QLockFile, Qt
+from PySide6.QtCore import QLockFile, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -45,7 +45,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -54,6 +53,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -69,10 +69,13 @@ class SettingsWindow(QWidget):
         config = load_config()
 
         outer = QVBoxLayout(self)
-        self._display_group = self._make_display_group(config)
-        outer.addWidget(self._display_group)
-        outer.addWidget(self._make_sound_group(config))
-        outer.addWidget(self._make_scene_group(config), 1)
+        # よく変える「通知する場面」を最初のタブにし、一覧にタブの高さをすべて使う
+        tabs = QTabWidget()
+        tabs.addTab(self._make_scene_tab(config), tr("settings.group_scenes"))
+        tabs.addTab(self._make_display_tab(config), tr("settings.group_display"))
+        tabs.addTab(self._make_sound_tab(config), tr("settings.group_sound"))
+        tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, self._fit_display_group))
+        outer.addWidget(tabs, 1)
 
         self._status = QLabel("")
         self._status.setStyleSheet("color: gray;")
@@ -92,13 +95,13 @@ class SettingsWindow(QWidget):
         outer.addLayout(buttons)
 
         self._saved = self._values()
-        # 場面の一覧が数件は見える高さにする（画面が低いときは収まる高さまで）
+        # 場面の一覧をなるべくスクロールせずに見渡せる高さにする（画面が低いときは収まる高さまで）
         available = self.screen().availableGeometry().height()
         self.resize(600, min(840, available - 60))
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().resizeEvent(event)
-        self._fit_display_group()
+        QTimer.singleShot(0, self._fit_display_group)  # タブの中の幅は、レイアウトし直したあとで決まる
 
     def _fit_display_group(self) -> None:
         """「表示」の高さの下限を、今の幅で折り返した高さに合わせる。
@@ -106,15 +109,15 @@ class SettingsWindow(QWidget):
         ウィンドウの高さの下限は折り返す前の幅で計算されるので、何もしないと折り返した補足の行が見切れる。
         """
         group = getattr(self, "_display_group", None)
-        if group is None:
+        if group is None or not group.isVisible():  # 表示していないタブの幅は、まだ決まっていない
             return
-        margins = self.layout().contentsMargins()
-        height = group.heightForWidth(self.width() - margins.left() - margins.right())
+        height = group.heightForWidth(group.width())
         if height > 0:
             group.setMinimumHeight(height)
 
-    def _make_display_group(self, config) -> QGroupBox:
-        group = QGroupBox(tr("settings.group_display"))
+    def _make_display_tab(self, config) -> QWidget:
+        group = QWidget()
+        self._display_group = group
         form = QFormLayout(group)
         # macOS の既定では入力欄の列が広がらず、折り返す補足が狭い幅に押し込まれる
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -128,6 +131,23 @@ class SettingsWindow(QWidget):
         language_column.addWidget(self._language, 0, Qt.AlignLeft)
         language_column.addWidget(_hint_label(tr("settings.language_hint")))
         form.addRow(tr("settings.language"), language_column)
+
+        self._screen = QComboBox()
+        self._screen.addItem(tr("settings.screen_primary"), "")
+        for screen in QApplication.screens():
+            if not screen.name():  # 名前で覚えるので、名前の無いディスプレイは選べない
+                continue
+            size = screen.geometry().size()
+            self._screen.addItem(
+                tr("settings.screen_item", name=screen.name(), width=size.width(), height=size.height()), screen.name()
+            )
+        if self._screen.findData(config.screen) < 0:  # 今はつながっていない。保存しても設定が消えないように残す
+            self._screen.addItem(tr("settings.screen_missing", name=config.screen), config.screen)
+        self._screen.setCurrentIndex(self._screen.findData(config.screen))
+        screen_column = QVBoxLayout()
+        screen_column.addWidget(self._screen, 0, Qt.AlignLeft)
+        screen_column.addWidget(_hint_label(tr("settings.screen_hint")))
+        form.addRow(tr("settings.screen"), screen_column)
 
         self._width = QSpinBox()
         self._width.setRange(*WIDTH_RANGE)
@@ -198,7 +218,14 @@ class SettingsWindow(QWidget):
         suppress_column.addWidget(self._suppress_focused)
         suppress_column.addWidget(_hint_label(tr("settings.suppress_focused_hint")))
         form.addRow(tr("settings.suppress_focused_label"), suppress_column)
-        return group
+
+        self._shrink_animation = QCheckBox(tr("settings.shrink_animation"))
+        self._shrink_animation.setChecked(config.click_shrink_animation)
+        shrink_column = QVBoxLayout()
+        shrink_column.addWidget(self._shrink_animation)
+        shrink_column.addWidget(_hint_label(tr("settings.shrink_animation_hint")))
+        form.addRow(tr("settings.shrink_animation_label"), shrink_column)
+        return _top_aligned(group)
 
     def _update_delay_widgets(self, *_args) -> None:
         reading = self._delay_reading.isChecked()
@@ -211,8 +238,8 @@ class SettingsWindow(QWidget):
         self._cpm_hint.setText(tr("settings.cpm_hint", example=example, max=READING_DELAY_MAX))
         self._fit_display_group()  # 補足の行数が変わることがある
 
-    def _make_sound_group(self, config) -> QGroupBox:
-        group = QGroupBox(tr("settings.group_sound"))
+    def _make_sound_tab(self, config) -> QWidget:
+        group = QWidget()
         column = QVBoxLayout(group)
         self._sound_enabled = QCheckBox(tr("settings.sound_enabled"))
         self._sound_enabled.setChecked(config.sound_enabled)
@@ -258,7 +285,7 @@ class SettingsWindow(QWidget):
         row.addWidget(hint, 1)
         column.addLayout(row)
         self._update_sound_widgets()
-        return group
+        return _top_aligned(group)
 
     def _update_sound_widgets(self, *_args) -> None:
         enabled = self._sound_enabled.isChecked()
@@ -293,8 +320,7 @@ class SettingsWindow(QWidget):
             return
         play_sound(path)
 
-    def _make_scene_group(self, config) -> QGroupBox:
-        group = QGroupBox(tr("settings.group_scenes"))
+    def _make_scene_tab(self, config) -> QWidget:
         inner = QWidget()
         column = QVBoxLayout(inner)
         self._scene_boxes: dict[str, QCheckBox] = {}
@@ -320,9 +346,7 @@ class SettingsWindow(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setWidget(inner)
-        layout = QVBoxLayout(group)
-        layout.addWidget(scroll)
-        return group
+        return scroll
 
     def _update_line_limit(self, *_args) -> None:
         auto = self._auto_limit.isChecked()
@@ -333,12 +357,14 @@ class SettingsWindow(QWidget):
     def _values(self) -> dict:
         return {
             "language": self._language.currentData(),
+            "screen": self._screen.currentData(),
             "width": self._width.value(),
             "command_line_limit": None if self._auto_limit.isChecked() else self._line_limit.value(),
             "delay_seconds": self._delay.value(),
             "delay_mode": "reading" if self._delay_reading.isChecked() else "fixed",
             "reading_cpm": self._reading_cpm.value(),
             "suppress_when_focused": self._suppress_focused.isChecked(),
+            "click_shrink_animation": self._shrink_animation.isChecked(),
             "notify": {key: box.isChecked() for key, box in self._scene_boxes.items()},
             "sound": {
                 "enabled": self._sound_enabled.isChecked(),
@@ -391,6 +417,16 @@ class SettingsWindow(QWidget):
                 event.ignore()
                 return
         event.accept()
+
+
+def _top_aligned(content: QWidget) -> QWidget:
+    """タブの1ページ。中身を上に寄せ、余った高さは下の空きにする。"""
+    page = QWidget()
+    column = QVBoxLayout(page)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.addWidget(content)
+    column.addStretch(1)
+    return page
 
 
 def _hint_label(text: str = "") -> QLabel:
