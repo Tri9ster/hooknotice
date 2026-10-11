@@ -137,6 +137,8 @@ settings.json は変えずに、設定画面から場面ごとに切り替えら
 ### 4.3 複数通知の積み上げ（`StackSlot`）
 
 常駐プロセスが無いので、複数の通知プロセスが1つの JSON ファイルで位置を調整する。
+通知はすべて同じディスプレイ（設定の `screen`。`_target_screen`）に出るので、状態ファイルはディスプレイごとに分けない。
+`availableGeometry()` は仮想デスクトップ全体の座標なので、主ディスプレイ以外でも同じ計算で右下に置ける。
 
 - ファイル: `platform_support.state_dir()` の `stack_state.json`（macOS は `~/Library/Application Support/hooknotice/`）
 - 中身: 表示中の通知の到着順リスト `[{"pid": 123, "height": 146}, ...]`。`platform_support.locked_state` で排他制御
@@ -243,7 +245,7 @@ PowerShell（`format_powershell_command`）は、括弧の中のパイプも開�
 
 ### 4.8 設定ファイル（`hooknotice_config.py`）
 
-- `config.json` の各キー（`language`・`width`・`command_line_limit`・`notify`・`sound`・待ち時間の3つ・`suppress_when_focused`・`click_shrink_animation`・`explain`）を `load_config()` で読む。無い・壊れている・範囲外の値は既定値
+- `config.json` の各キー（`language`・`width`・`command_line_limit`・`notify`・`sound`・待ち時間の3つ・`suppress_when_focused`・`click_shrink_animation`・`screen`・`explain`）を `load_config()` で読む。無い・壊れている・範囲外の値は既定値
   （例外を出さない。Hook は何があっても Claude Code を止めてはいけないため）。
 - `bool` は `int` の一種なので、`true` を 1 と解釈しないよう除外している。
 - 文字数の自動計算 `auto_line_limit(width) = floor((width − 34) / 6.61) − 2`:

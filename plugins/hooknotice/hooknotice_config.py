@@ -91,6 +91,7 @@ class Config:
     sound_system: str = DEFAULT_SYSTEM_SOUND  # システムの通知音の名前（拡張子なし）
     sound_file: str = ""  # 任意の音声ファイルのパス
     suppress_when_focused: bool = False  # Claude Code を起動したアプリが最前面のときは通知しない（macOS）
+    screen: str = ""  # 通知を出すディスプレイの名前（QScreen.name()）。空文字は主ディスプレイ
     click_shrink_animation: bool = True  # 通知を閉じるとき、少し縮むアニメーションを入れる
     language: str = "auto"  # LANGUAGES のどれか
     explain_model: str = DEFAULT_EXPLAIN_MODEL  # 解説に使うモデル（claude --model に渡す文字列）
@@ -167,6 +168,7 @@ def load_config(path: str = CONFIG_PATH) -> Config:
         sound_file=sound.get("file") if isinstance(sound.get("file"), str) else "",
         suppress_when_focused=data.get("suppress_when_focused") if isinstance(data.get("suppress_when_focused"), bool)
         else False,
+        screen=data.get("screen") if isinstance(data.get("screen"), str) else "",
         click_shrink_animation=data.get("click_shrink_animation")
         if isinstance(data.get("click_shrink_animation"), bool) else True,
         language=data.get("language") if data.get("language") in LANGUAGES else "auto",

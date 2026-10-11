@@ -288,6 +288,15 @@ def _lerp_color(base: QColor, highlight: QColor, t: float) -> QColor:
     return QColor(int(r), int(g), int(b))
 
 
+def _target_screen():
+    """通知を出すディスプレイ。設定（screen）の名前のものが無ければ（外したときなど）主ディスプレイ。"""
+    if CONFIG.screen:
+        for screen in QApplication.screens():
+            if screen.name() == CONFIG.screen:
+                return screen
+    return QApplication.primaryScreen()
+
+
 def _current_theme() -> str:
     """システムの外観設定に対応するテーマ名を返す。判定できなければ従来どおりダーク。"""
     scheme = QApplication.styleHints().colorScheme()
@@ -933,7 +942,7 @@ class NotificationWindow(QWidget):
 
     def _fit_height(self, layout: QVBoxLayout) -> None:
         """内容に合わせて高さを決める。画面に収まらない分は解説欄→コマンド欄の順に縮めてスクロールさせる。"""
-        screen = QApplication.primaryScreen()
+        screen = _target_screen()
         max_height = (
             screen.availableGeometry().height() - 2 * MARGIN if screen else 10_000
         )
@@ -977,7 +986,7 @@ class NotificationWindow(QWidget):
         if heights is None or heights == self._stack_heights:
             return None
         self._stack_heights = heights
-        screen = QApplication.primaryScreen()
+        screen = _target_screen()
         if screen is None:
             return None
         target = _stack_position(heights, screen.availableGeometry())

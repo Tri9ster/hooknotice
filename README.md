@@ -179,7 +179,8 @@ The Windows support code is included but has not been tested on a real machine.
 
 - **Settings window**: press **⚙** at the top right of a notification, or type **`/hooknotice:settings`** in
   Claude Code. You can change the display language, turn each kind of notification on or off, and change the delay
-  before notifying, the sound, the notification width, the line length for long commands, and the closing animation.
+  before notifying, the sound, the notification width, the line length for long commands, the closing animation, and the display that shows notifications (when you
+  have several).
   The items are split into three tabs: "When to notify", "Display", and "Sound".
   Press "Save" and the change applies from the next notification (no need to restart Claude Code). "Test
   notification" lets you check the current width.
@@ -214,6 +215,7 @@ The Windows support code is included but has not been tested on a real machine.
   | Key | Default | Range | Meaning |
   | --- | --- | --- | --- |
   | `language` | `auto` | `auto` / `ja` / `en` | Display language. `auto` uses Japanese if the OS language is Japanese, and English otherwise (see "Language" below) |
+  | `screen` | `""` | Display name | Display that shows notifications. Empty means the main display. Choosing it from the list in the settings window is the reliable way to get the name. If it is not found (for example, unplugged), the main display is used |
   | `width` | 600 | 280–800 (px) | Width of the notification card |
   | `command_line_limit` | `null` | 20–200 (chars) | Line length at which long commands are split. `null` calculates it from the width (600px → 83 chars, 340px → 44 chars) |
   | `notify` | Table above | `true` / `false` per kind | Kinds not listed use their defaults |

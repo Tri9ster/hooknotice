@@ -132,6 +132,23 @@ class SettingsWindow(QWidget):
         language_column.addWidget(_hint_label(tr("settings.language_hint")))
         form.addRow(tr("settings.language"), language_column)
 
+        self._screen = QComboBox()
+        self._screen.addItem(tr("settings.screen_primary"), "")
+        for screen in QApplication.screens():
+            if not screen.name():  # 名前で覚えるので、名前の無いディスプレイは選べない
+                continue
+            size = screen.geometry().size()
+            self._screen.addItem(
+                tr("settings.screen_item", name=screen.name(), width=size.width(), height=size.height()), screen.name()
+            )
+        if self._screen.findData(config.screen) < 0:  # 今はつながっていない。保存しても設定が消えないように残す
+            self._screen.addItem(tr("settings.screen_missing", name=config.screen), config.screen)
+        self._screen.setCurrentIndex(self._screen.findData(config.screen))
+        screen_column = QVBoxLayout()
+        screen_column.addWidget(self._screen, 0, Qt.AlignLeft)
+        screen_column.addWidget(_hint_label(tr("settings.screen_hint")))
+        form.addRow(tr("settings.screen"), screen_column)
+
         self._width = QSpinBox()
         self._width.setRange(*WIDTH_RANGE)
         self._width.setSingleStep(20)
@@ -340,6 +357,7 @@ class SettingsWindow(QWidget):
     def _values(self) -> dict:
         return {
             "language": self._language.currentData(),
+            "screen": self._screen.currentData(),
             "width": self._width.value(),
             "command_line_limit": None if self._auto_limit.isChecked() else self._line_limit.value(),
             "delay_seconds": self._delay.value(),
