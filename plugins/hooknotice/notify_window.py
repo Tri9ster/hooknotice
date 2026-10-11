@@ -449,6 +449,8 @@ class NotificationWindow(QWidget):
         self._choice_groups: list[QButtonGroup] = []  # 質問ごとの選択肢ボタン
         self._choice_inputs: list[QPlainTextEdit] = []  # 質問ごとの自由記述の入力欄
         self._feedback_input: QPlainTextEdit | None = None  # 拒否に添えるメッセージの入力欄（許可待ち・計画）
+        self._feedback_hint: QLabel | None = None  # 入力中に出す「許可のボタンでは送られない」の注意
+        self._deny_button: QPushButton | None = None  # メッセージが送られるボタン（キャンセル・計画を続ける）
         self._inputs: list[QPlainTextEdit] = []  # 高さを決める対象（上の入力欄すべて）
         self._submit_button: QPushButton | None = None
         self._explain_input = explain_input
@@ -534,7 +536,11 @@ class NotificationWindow(QWidget):
                 tr("window.plan_feedback_placeholder" if plan_actions else "window.deny_feedback_placeholder")
             )
             outer.addWidget(self._feedback_input)
+            # 空のときも1行ぶんの高さを保つ（入力のたびにウィンドウの高さが変わらないように）
+            self._feedback_hint = self._make_label(" ", "body")
+            outer.addWidget(self._feedback_hint)
             outer.addLayout(self._make_plan_grid() if plan_actions else self._make_action_row())
+            self._feedback_input.textChanged.connect(self._update_feedback_labels)
         self._layout = outer
         self._fit_height(outer)
 
@@ -579,6 +585,8 @@ class NotificationWindow(QWidget):
             button.setObjectName(name)
             button.setCursor(Qt.PointingHandCursor)
             button.clicked.connect(lambda _=False, r=result: self._answer(r))
+            if result == RESULT_DENY:
+                self._deny_button = button
             row.addWidget(button)
         return row
 
@@ -592,6 +600,8 @@ class NotificationWindow(QWidget):
             button.setObjectName(name)
             button.setCursor(Qt.PointingHandCursor)
             button.clicked.connect(lambda _=False, r=result: self._answer(r))
+            if result == RESULT_DENY:
+                self._deny_button = button
             grid.addWidget(button, i // 2, i % 2)
         return grid
 
@@ -706,6 +716,16 @@ class NotificationWindow(QWidget):
         if result == RESULT_DENY and feedback:
             result = RESULT_DENY_PREFIX + json.dumps({"message": feedback}, ensure_ascii=False)
         self._animate_close(activate=False, result=result)
+
+    def _update_feedback_labels(self) -> None:
+        """入力欄に書かれている間、メッセージが送られるボタンと送られないボタンが分かるようにする。"""
+        written = bool(self._input_text(self._feedback_input))
+        if self._plan_actions:
+            deny, deny_with_message, unsent = "button.plan_continue", "button.plan_continue_with_message", "window.feedback_unsent_plan"
+        else:
+            deny, deny_with_message, unsent = "button.cancel", "button.cancel_with_message", "window.feedback_unsent_ok"
+        self._deny_button.setText(tr(deny_with_message if written else deny))
+        self._feedback_hint.setText(tr(unsent) if written else " ")
 
     def _confirm_mute(self) -> None:
         """この種類の通知をオフにするか確かめ、OK なら設定（config.json の notify）を書き換える。"""

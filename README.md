@@ -31,7 +31,9 @@ The detailed specification, technical notes, the development log, and the record
   - **OK**: returns "allow" to Claude Code, and the tool runs.
   - **Cancel**: returns "deny". Claude is told that you denied it and continues working.
     If you write a message (a reason, or what to do instead) in the input box above the buttons before pressing
-    it, Claude receives that message too.
+    it, Claude receives that message too (while you are writing, the button reads "Deny and send message").
+    If you press OK, the message is not sent. The message reaches Claude as the reason for the denial; it is not
+    shown as something you said in the Claude Code screen.
   - **✕**: closes without deciding. Answer in the terminal's permission dialog as usual.
   - Notifications with buttons do not close when you click the body (anywhere other than the buttons), so a
     misclick does not lose your answer.
