@@ -231,6 +231,47 @@ The Windows support code is included but has not been tested on a real machine.
 - **Change other positions and sizes**: edit `HEIGHT` (minimum height) / `MARGIN` / `GAP` in `notify_window.py`
   (in a clone of this repository; see "Development" below).
 
+### Model used by "Explain"
+
+The "Explain" button uses `sonnet` (with effort `low`) by default. To change it, edit `explain` in `config.json`
+(there is no settings window for this). The change applies from the next notification.
+
+```json
+{
+  "explain": { "model": "haiku", "effort": "low" }
+}
+```
+
+**We recommend the default, `sonnet`.** In a comparison of `sonnet` and `haiku`, `sonnet` was faster, and its
+explanations were more useful for deciding whether to allow the operation.
+
+The table shows how long the explanation took for six samples (average of 2 runs each, in seconds).
+
+| Sample | Lines | To first character: sonnet | To first character: haiku | To completion: sonnet | To completion: haiku |
+| --- | --- | --- | --- | --- | --- |
+| bash, small | 1 | 2.1 | 7.1 | 9.8 | 12.9 |
+| bash, medium | 23 | 2.0 | 6.4 | 15.6 | 17.9 |
+| bash, large | 90 | 1.3 | 7.8 | 19.3 | 26.9 |
+| python, small | 1 | 1.7 | 8.5 | 7.3 | 13.0 |
+| python, medium | 26 | 1.7 | 5.4 | 11.9 | 13.5 |
+| python, large | 104 | 2.0 | 22.6 | 15.9 | 42.1 |
+
+- **Speed**: `sonnet` showed the first character sooner in all 24 runs, in 1–2 seconds every time (`haiku` took
+  4–11 seconds, and 34 seconds at worst). Once writing starts, both write at about the same speed, so the
+  difference in completion time is mostly the wait before the first character.
+- **Length**: `sonnet` groups steps even for long code, and wrote 2,600–2,900 characters for the large python
+  sample. `haiku` makes a step for each function, so it wrote 4,200–5,900 characters and finished later.
+- **Content**: `sonnet` explains what will actually happen in this run (for example, that no argument is passed
+  so this run only checks, or that a rollback restores the code but not the database). It marks what it cannot
+  read from the input as a guess. `haiku` follows what the code says in detail, and its explanations sometimes
+  had small errors in paths or in the number of days.
+- **Where the difference is small**: for a one-line command, the content differed little and the structure was
+  almost the same. Both models list basic dangers such as deleting, overwriting, and `sudo`.
+
+These results are **as of 2026-10-11** (hooknotice 0.1.8, effort `low`, explanations in Japanese). Response speed
+and content change when the models are updated, so the results may not always hold. Speed was measured twice per
+sample and content was compared over 12 runs per model, so treat the numbers as a rough guide.
+
 ## Checking that it works
 
 - Open the settings window (`/hooknotice:settings`) and press "Test notification". A sound plays, and a card with a
