@@ -112,7 +112,14 @@ settings.json は変えずに、設定画面から場面ごとに切り替えら
 - `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint`、背景透過、角丸は `paintEvent` で描く。
 - `Qt.Tool` は使わない。別プロセスの複数通知で最前面の重なり順が不安定になったため
   （Dock アイコンが一瞬出るのは許容）。
-- フォーカスを奪わない（`activate()` を呼ばない）。
+- フォーカスを奪わない（`activate()` を呼ばない）。入力欄は `Qt.ClickFocus` にして、クリックされるまでフォーカスを取らない。
+- 入力欄（`QPlainTextEdit`）の高さは `_fit_height` で決める。作った時点ではウィンドウの子になっておらず、
+  スタイルシートのフォントがまだ当たっていないため。
+- 解説欄を差し込む位置は、伸縮用の stretch の位置（`_stretch_index`）で覚える。「末尾から2つ目」と数えると、
+  ボタン行の上に入力欄を足したときにずれる。
+- 🔕 の確認ダイアログ（`QMessageBox`）は親なしで作る。親を通知ウィンドウにすると、通知のスタイルシート
+  （透明なボタン）がダイアログにも及ぶ。確認中に通知が自動で閉じることがあるので、戻ったあとは `_closing` を見てから
+  ウィジェットに触る（`WA_DeleteOnClose` で破棄済みのことがある）。
 - 背景は `QLinearGradient` のハイライト帯が流れるアニメーション（40ms 間隔）。色相・角度に乱数の揺らぎを
   入れ、通知ごとに少しずつ見た目が変わる。
 
@@ -145,6 +152,9 @@ settings.json は変えずに、設定画面から場面ごとに切り替えら
 
 - ボタン行: 左端に「解説」、右寄せで「キャンセル」「OK」。
 - 閉じるときに結果を stdout に1行出す: OK → `allow`、キャンセル → `deny`、✕・本体クリック・コマンド欄クリック → `dismiss`。
+- 入力欄にメッセージを書いて拒否したときは `deny {"message": …}`、質問への回答は `answers {質問文: 回答}`。
+  どちらも「接頭辞 + JSON」で、改行を含む入力も `json.dumps` で1行になる。接頭辞の定数は `notify_window.py`
+  （`RESULT_DENY_PREFIX` / `RESULT_ANSWERS_PREFIX`）と `hook_notify.py`（`DENY_PREFIX` / `ANSWERS_PREFIX`）でそろえる。
 - 親（待っている Hook）が先に終わったら何も出さずに閉じる。判定は `os.getppid()` が起動時と変わったか、
   **または pid 1 か**（Hook が先に死んでからウィンドウが起動した場合、起動時点で既に launchd の子になっている）。
   監視する pid は Hook が `--parent-pid` で渡す（省略時は `os.getppid()`）。Windows の venv の `python.exe` はランチャーで、
@@ -233,7 +243,7 @@ PowerShell（`format_powershell_command`）は、括弧の中のパイプも開�
 
 ### 4.8 設定ファイル（`hooknotice_config.py`）
 
-- `config.json` の各キー（`language`・`width`・`command_line_limit`・`notify`・`sound`・待ち時間の3つ）を `load_config()` で読む。無い・壊れている・範囲外の値は既定値
+- `config.json` の各キー（`language`・`width`・`command_line_limit`・`notify`・`sound`・待ち時間の3つ・`suppress_when_focused`・`click_shrink_animation`・`explain`）を `load_config()` で読む。無い・壊れている・範囲外の値は既定値
   （例外を出さない。Hook は何があっても Claude Code を止めてはいけないため）。
 - `bool` は `int` の一種なので、`true` を 1 と解釈しないよう除外している。
 - 文字数の自動計算 `auto_line_limit(width) = floor((width − 34) / 6.61) − 2`:
@@ -241,6 +251,8 @@ PowerShell（`format_powershell_command`）は、括弧の中のパイプも開�
   `hook_notify.py` は Qt を使えない（標準ライブラリのみ）ので、実測値を定数で持つ。
 - 通知は1件ごとに新しいプロセスで起動し、そのたびに設定を読むので、ファイルの変更（設定画面の保存を含む）が
   次の通知から反映される。設定画面（`settings_window.py`）は 2026-09-27 に追加した。
+- 設定を書くのは設定画面と、通知の 🔕（`save_config({"notify": {<key>: false}})`）の2か所。`save_config` は指定した
+  キーだけをマージするが、設定画面は開いた時点の全場面を書くので、開いたままの設定画面を保存すると 🔕 の変更が戻る。
 
 ### 4.9 質問・計画の承認待ちの本文（`--markdown`）
 

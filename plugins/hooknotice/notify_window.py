@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 
-from hooknotice_config import load_config
+from hooknotice_config import load_config, save_config
 from messages import tr
 from platform_support import (
     activate_app,
@@ -63,6 +63,8 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QTextBrowser,
     QTextEdit,
@@ -86,6 +88,7 @@ STACK_POLL_INTERVAL_MS = 250
 MOVE_ANIMATION_MS = 200
 CLICK_SHRINK_RATIO = 0.94
 CLICK_ANIMATION_MS = 120
+INPUT_LINES = 3  # 入力欄の高さ（行数）。それより長い入力はスクロールする
 
 BASE_HUE_DEGREES = 220.0
 HUE_JITTER_DEGREES = 20.0
@@ -175,6 +178,17 @@ STYLE_SHEET = """
         padding: 4px;
         font-size: 11px;
     }}
+    QPlainTextEdit#input {{
+        color: {command};
+        background: {command_bg};
+        border: 1px solid {action_bg_hover};
+        border-radius: 6px;
+        padding: 2px;
+        font-size: 12px;
+    }}
+    QPlainTextEdit#input[unused="true"] {{
+        color: {scrollbar};
+    }}
     QScrollBar:vertical {{
         background: transparent;
         width: 6px;
@@ -245,6 +259,8 @@ STATE_PATH = STATE_DIR / "stack_state.json"
 # --actions 指定時に stdout へ出力する結果（hook_notify.py と共通）
 RESULT_ALLOW = "allow"
 RESULT_DENY = "deny"
+# 入力欄にメッセージを書いて拒否したときの結果の接頭辞。後ろに {"message": 入力} の JSON が続く
+RESULT_DENY_PREFIX = "deny "
 RESULT_DISMISS = "dismiss"  # ✕・本体クリック。決定せずターミナルに委ねる
 # --plan-actions（計画の承認待ち）のボタン。承認は切り替え先の権限モードごとに分ける
 RESULT_PLAN_AUTO = "plan_auto"
@@ -412,13 +428,19 @@ class NotificationWindow(QWidget):
         plan_actions: bool = False,
         questions: list[dict] | None = None,
         parent_pid: int = 0,
+        scene: str = "",
     ):
         super().__init__()
         self._bundle_id = bundle_id
+        self._scene = scene  # 設定（config.json の notify）のキー。空なら「通知をオフにする」ボタンを出さない
+        self._mute_button: QPushButton | None = None
         self._actions = actions
         self._plan_actions = plan_actions
         self._questions = questions or []  # [{"question", "header", "multiSelect", "labels"}]
         self._choice_groups: list[QButtonGroup] = []  # 質問ごとの選択肢ボタン
+        self._choice_inputs: list[QPlainTextEdit] = []  # 質問ごとの自由記述の入力欄
+        self._feedback_input: QPlainTextEdit | None = None  # 拒否に添えるメッセージの入力欄（許可待ち・計画）
+        self._inputs: list[QPlainTextEdit] = []  # 高さを決める対象（上の入力欄すべて）
         self._submit_button: QPushButton | None = None
         self._explain_input = explain_input
         self._explain_button: QPushButton | None = None
@@ -468,6 +490,12 @@ class NotificationWindow(QWidget):
         )
         top_row.addWidget(title_label)
         top_row.addStretch(1)
+        if scene:
+            self._mute_button = QPushButton("🔕")
+            self._mute_button.setFixedSize(20, 20)
+            self._mute_button.setToolTip(tr("window.mute_tooltip"))
+            self._mute_button.clicked.connect(self._confirm_mute)
+            top_row.addWidget(self._mute_button)
         top_row.addWidget(settings_button)
         top_row.addWidget(close_button)
         outer.addLayout(top_row)
@@ -486,12 +514,17 @@ class NotificationWindow(QWidget):
             outer.addWidget(self._markdown_view)
         if body or not (description or command or markdown):
             outer.addWidget(self._make_label(body, "body"))
+        self._stretch_index = outer.count()  # 解説欄を差し込む位置（伸縮用の stretch の直前）
         outer.addStretch(1)
         if actions and self._questions:
             for question in self._questions:
                 outer.addLayout(self._make_choice_list(question))
             outer.addLayout(self._make_submit_row())
         elif actions:
+            self._feedback_input = self._make_input(
+                tr("window.plan_feedback_placeholder" if plan_actions else "window.deny_feedback_placeholder")
+            )
+            outer.addWidget(self._feedback_input)
             outer.addLayout(self._make_plan_grid() if plan_actions else self._make_action_row())
         self._layout = outer
         self._fit_height(outer)
@@ -536,9 +569,7 @@ class NotificationWindow(QWidget):
             button = QPushButton(text)
             button.setObjectName(name)
             button.setCursor(Qt.PointingHandCursor)
-            button.clicked.connect(
-                lambda _=False, r=result: self._animate_close(activate=False, result=r)
-            )
+            button.clicked.connect(lambda _=False, r=result: self._answer(r))
             row.addWidget(button)
         return row
 
@@ -551,9 +582,7 @@ class NotificationWindow(QWidget):
             button = QPushButton(tr(key))
             button.setObjectName(name)
             button.setCursor(Qt.PointingHandCursor)
-            button.clicked.connect(
-                lambda _=False, r=result: self._animate_close(activate=False, result=r)
-            )
+            button.clicked.connect(lambda _=False, r=result: self._answer(r))
             grid.addWidget(button, i // 2, i % 2)
         return grid
 
@@ -575,12 +604,60 @@ class NotificationWindow(QWidget):
             button.setCursor(Qt.PointingHandCursor)
             group.addButton(button)
             column.addWidget(button)
-        group.buttonToggled.connect(self._update_submit_enabled)
+        multi = bool(question.get("multiSelect"))
+        edit = self._make_input(tr("window.other_placeholder_multi" if multi else "window.other_placeholder"))
+        column.addWidget(edit)
+        group.buttonToggled.connect(
+            lambda _button, checked, g=group, e=edit: self._on_choice_toggled(g, e, checked)
+        )
+        edit.textChanged.connect(lambda g=group, e=edit: self._on_other_changed(g, e))
         self._choice_groups.append(group)
+        self._choice_inputs.append(edit)
         return column
 
+    def _make_input(self, placeholder: str) -> QPlainTextEdit:
+        """自由記述の入力欄（複数行。Enter で改行）。クリックされるまでフォーカスを取らない。"""
+        edit = QPlainTextEdit()
+        edit.setObjectName("input")
+        edit.setPlaceholderText(placeholder)
+        edit.setTabChangesFocus(True)
+        edit.setFocusPolicy(Qt.ClickFocus)
+        edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._inputs.append(edit)  # 高さは、スタイルが当たったあと _fit_height で決める
+        return edit
+
+    def _on_choice_toggled(self, group: QButtonGroup, edit: QPlainTextEdit, checked: bool) -> None:
+        # 単一選択は、あとから操作したほうを回答にする。選択肢を選んだら入力欄は使わない（文字は残す）
+        if checked and group.exclusive():
+            self._set_input_unused(edit, True)
+        self._update_submit_enabled()
+
+    def _on_other_changed(self, group: QButtonGroup, edit: QPlainTextEdit) -> None:
+        self._set_input_unused(edit, False)
+        checked = group.checkedButton()
+        if group.exclusive() and checked is not None and edit.toPlainText().strip():
+            group.setExclusive(False)  # 排他のままでは、最後の1つのチェックを外せない
+            checked.setChecked(False)
+            group.setExclusive(True)
+        self._update_submit_enabled()
+
+    @staticmethod
+    def _set_input_unused(edit: QPlainTextEdit, unused: bool) -> None:
+        """入力欄を「回答に使わない」表示（薄い文字）に切り替える。"""
+        if bool(edit.property("unused")) == unused:
+            return
+        edit.setProperty("unused", unused)
+        edit.style().unpolish(edit)  # 動的プロパティで変わるスタイルは、当て直さないと反映されない
+        edit.style().polish(edit)
+
+    @staticmethod
+    def _input_text(edit: QPlainTextEdit | None) -> str:
+        if edit is None or edit.property("unused"):
+            return ""
+        return edit.toPlainText().strip()
+
     def _make_submit_row(self) -> QHBoxLayout:
-        """選択肢の質問用のボタン行。すべての質問で1つ以上選ぶまで「回答する」は押せない。"""
+        """選択肢の質問用のボタン行。すべての質問で1つ以上選ぶか、入力欄に書くまで「回答する」は押せない。"""
         row = QHBoxLayout()
         row.setContentsMargins(0, 4, 4, 0)
         row.addStretch(1)
@@ -594,18 +671,65 @@ class NotificationWindow(QWidget):
 
     def _update_submit_enabled(self, *_args) -> None:
         if self._submit_button is not None:
-            self._submit_button.setEnabled(
-                all(group.checkedButton() is not None for group in self._choice_groups)
-            )
+            self._submit_button.setEnabled(all(
+                group.checkedButton() is not None or self._input_text(edit)
+                for group, edit in zip(self._choice_groups, self._choice_inputs)
+            ))
 
     def _submit_answers(self) -> None:
-        """{質問文: 選んだ選択肢} を返す。複数選択はカンマ区切りでつなぐ（AskUserQuestion の answers の形式）。"""
+        """{質問文: 回答} を返す。複数選択はカンマ区切りでつなぐ（AskUserQuestion の answers の形式）。
+
+        入力欄の自由記述は、単一選択では選択肢の代わりに、複数選択では選んだ選択肢に足して返す。
+        """
         answers = {}
-        for question, group in zip(self._questions, self._choice_groups):
+        for question, group, edit in zip(self._questions, self._choice_groups, self._choice_inputs):
             labels = [b.text() for b in group.buttons() if b.isChecked()]
+            other = self._input_text(edit)
+            if other:
+                labels.append(other)
             answers[question["question"]] = ", ".join(labels)
         result = RESULT_ANSWERS_PREFIX + json.dumps(answers, ensure_ascii=False)
         self._animate_close(activate=False, result=result)
+
+    def _answer(self, result: str) -> None:
+        """ボタンの結果を返して閉じる。拒否は、入力欄にメッセージがあれば添える。"""
+        feedback = self._input_text(self._feedback_input)
+        if result == RESULT_DENY and feedback:
+            result = RESULT_DENY_PREFIX + json.dumps({"message": feedback}, ensure_ascii=False)
+        self._animate_close(activate=False, result=result)
+
+    def _confirm_mute(self) -> None:
+        """この種類の通知をオフにするか確かめ、OK なら設定（config.json の notify）を書き換える。"""
+        label_key = f"scene.{self._scene}.label"
+        label = tr(label_key)
+        if label == label_key:  # 一覧に無い（将来増えた）場面は、キーをそのまま見せる
+            label = self._scene
+        # 親なしで作る（親にすると、通知ウィンドウのスタイルシートがダイアログのボタンにも及ぶ）
+        box = QMessageBox(
+            QMessageBox.Question,
+            tr("window.mute_title"),
+            tr("window.mute_confirm", scene=label),
+            QMessageBox.Ok | QMessageBox.Cancel,
+        )
+        box.setInformativeText(tr("window.mute_hint"))
+        box.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        if box.exec() != QMessageBox.Ok:
+            return
+        try:
+            save_config({"notify": {self._scene: False}})
+        except OSError as error:
+            failed = QMessageBox(
+                QMessageBox.Warning, tr("window.mute_title"), tr("window.mute_failed", reason=str(error))
+            )
+            failed.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+            failed.exec()
+            return
+        if self._closing:  # 確認中に、Hook の終了などで閉じ始めている
+            return
+        self._mute_button.hide()
+        # 回答待ちの通知は、今回の分をこのウィンドウで答えられるように残す
+        if not self._actions:
+            self._animate_close(activate=False, result=RESULT_DISMISS)
 
     def _make_command_block(self, command: str) -> QTextEdit:
         """コマンド全文を等幅で表示する。QLabel は空白のない長い文字列を折り返せないため QTextEdit を使う。"""
@@ -644,7 +768,7 @@ class NotificationWindow(QWidget):
         """解説を表示する欄。本文欄やコマンド欄と違い、クリックしても閉じず文字を選択できる。"""
         view = self._new_markdown_view("explain")
         # ボタン行の直前（コマンド欄・本文の後、伸縮用の stretch の前）に差し込む
-        self._layout.insertWidget(self._layout.count() - 2, view)
+        self._layout.insertWidget(self._stretch_index, view)
         view.show()  # 表示済みのウィンドウに後から加えた子は、明示しないと非表示のまま
         return view
 
@@ -822,6 +946,10 @@ class NotificationWindow(QWidget):
         if self._command_edit is not None:
             self._fit_text_edit(self._command_edit, layout)
             shrinkable.append((self._command_edit, 40))
+        for edit in self._inputs:
+            edit.ensurePolished()
+            text_height = edit.fontMetrics().lineSpacing() * INPUT_LINES + 2 * edit.document().documentMargin()
+            edit.setFixedHeight(round(text_height) + 6)  # 6: スタイルシートの padding と枠線の上下分
         layout.activate()
         # 折り返しラベルが無いと totalHeightForWidth は -1 になるため最小サイズも見る
         height = max(
@@ -884,6 +1012,9 @@ class NotificationWindow(QWidget):
             self._explain_process.kill()
         if self._move_anim is not None:
             self._move_anim.stop()
+        if not CONFIG.click_shrink_animation:  # 設定でオフ。縮めずにすぐ閉じる
+            self._finish_close(activate, result)
+            return
 
         start = self.geometry()
         width = round(start.width() * CLICK_SHRINK_RATIO)
@@ -1019,6 +1150,7 @@ def main() -> int:
     parser.add_argument("--plan-actions", action="store_true")
     parser.add_argument("--questions", default="")  # 選択肢の質問の JSON（hook_notify.question_choices）
     parser.add_argument("--parent-pid", type=int, default=0)  # 回答を待つ Hook の pid（hook_notify.ask）
+    parser.add_argument("--scene", default="")  # 設定の notify のキー（hook_notify.scene_key）
     args, _unknown = parser.parse_known_args()
 
     app = QApplication(sys.argv[:1])
@@ -1038,6 +1170,7 @@ def main() -> int:
         plan_actions=args.plan_actions,
         questions=_parse_questions(args.questions),
         parent_pid=args.parent_pid,
+        scene=args.scene,
     )
     slot.acquire(window.height())
     app.aboutToQuit.connect(slot.release)

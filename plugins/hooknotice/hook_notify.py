@@ -92,6 +92,8 @@ NO_ACTION_TOOLS = ("AskUserQuestion",)
 QUESTION_TOOL = "AskUserQuestion"
 # notify_window.py が回答を返すときの接頭辞。後ろに {質問文: 選んだ選択肢} の JSON が続く
 ANSWERS_PREFIX = "answers "
+# 入力欄にメッセージを書いて拒否したときの接頭辞。後ろに {"message": 入力} の JSON が続く
+DENY_PREFIX = "deny "
 # 計画の承認待ちは OK/キャンセルの代わりに、承認後の権限モード別のボタンを出す
 PLAN_TOOL = "ExitPlanMode"
 # notify_window.py の計画承認ボタンの結果 → 承認後に切り替える権限モード
@@ -924,6 +926,16 @@ def explain_input(payload: dict) -> str:
     )
 
 
+def _deny_feedback(result: str) -> str:
+    """拒否の結果に添えられた入力欄のメッセージ。無い・形が崩れているときは空文字（固定の文言で拒否する）。"""
+    try:
+        data = json.loads(result[len(DENY_PREFIX):]) if result.startswith(DENY_PREFIX) else {}
+    except ValueError:
+        return ""
+    message = data.get("message") if isinstance(data, dict) else ""
+    return message.strip() if isinstance(message, str) else ""
+
+
 def permission_decision(result: str, payload: dict | None = None) -> dict | None:
     """ウィンドウの回答を PermissionRequest の決定に変換する。None はターミナルに委ねる。"""
     payload = payload or {}
@@ -951,8 +963,13 @@ def permission_decision(result: str, payload: dict | None = None) -> dict | None
                 {"type": "setMode", "mode": mode, "destination": "session"}
             ],
         }
-    elif result == "deny":
-        decision = {"behavior": "deny", "message": tr("deny.plan" if plan else "deny.permission")}
+    elif result == "deny" or result.startswith(DENY_PREFIX):
+        feedback = _deny_feedback(result)
+        if feedback:
+            message = tr("deny.plan_feedback" if plan else "deny.permission_feedback", message=feedback)
+        else:
+            message = tr("deny.plan" if plan else "deny.permission")
+        decision = {"behavior": "deny", "message": message}
     else:
         return None
     return {
@@ -1077,7 +1094,7 @@ def ask(args: list, payload: dict) -> None:
         print(json.dumps(decision, ensure_ascii=False), flush=True)
 
 
-def notify(event: str, payload: dict) -> None:
+def notify(event: str, payload: dict, scene: str = "") -> None:
     if not os.path.exists(VENV_PYTHON):
         start_setup()  # 準備がまだ。uv sync を実行してよいか確認する（今回の通知は出せない）
         return
@@ -1101,6 +1118,8 @@ def notify(event: str, payload: dict) -> None:
         "--title", title,
         "--bundle-id", host_bundle_id(),
     ]
+    if scene:
+        args += ["--scene", scene]  # 通知ウィンドウの「この種類の通知をオフにする」ボタン用
     shell = shell_command(event, payload)
     if shell is not None:
         description, command = shell
@@ -1260,7 +1279,7 @@ def main() -> int:
         # 許可待ちは何も出力しない＝通常どおりターミナル側のダイアログで答える
         if config.suppress_when_focused and host_app_focused():
             return 0
-        notify(args.event, payload)
+        notify(args.event, payload, key)
     except Exception:
         pass  # 通知に失敗しても Claude Code をブロックしない
     return 0

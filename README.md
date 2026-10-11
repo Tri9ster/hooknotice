@@ -30,6 +30,8 @@ The detailed specification, technical notes, the development log, and the record
 - **Permission notifications have "Cancel" and "OK" buttons, so you can answer right there.**
   - **OK**: returns "allow" to Claude Code, and the tool runs.
   - **Cancel**: returns "deny". Claude is told that you denied it and continues working.
+    If you write a message (a reason, or what to do instead) in the input box above the buttons before pressing
+    it, Claude receives that message too.
   - **✕**: closes without deciding. Answer in the terminal's permission dialog as usual.
   - Notifications with buttons do not close when you click the body (anywhere other than the buttons), so a
     misclick does not lose your answer.
@@ -39,16 +41,23 @@ The detailed specification, technical notes, the development log, and the record
   - For plan approval (ExitPlanMode), four buttons appear instead of OK / Cancel: "Keep planning",
     "Approve, ask each time", "Approve, auto-accept edits", and "Approve in auto mode". Each approve button
     also switches the permission mode to default / acceptEdits / auto. To give feedback on the plan in writing,
-    close with ✕ and answer in the terminal.
+    write it in the input box above the buttons and press "Keep planning".
   - For multiple-choice questions (AskUserQuestion), the questions and options (with previews) are formatted in
     the body, with a button for each option below. After choosing an answer for every question, press
     "Submit" to continue with those answers (questions that allow several answers let you turn on several).
-    To answer in free text, close with ✕ and answer in the terminal. If a question has no options, the
+    To answer in free text, write in the input box below the options. For a single-answer question, whichever
+    you used last (an option or the input box) becomes the answer. For a question that allows several answers,
+    what you write is added to the options you selected. If a question has no options, the
     notification has no buttons, and clicking it brings VS Code (or your terminal) to the front.
 - Press the **"Explain" button** and Claude writes an explanation of the operation it is asking to run (command,
   edit, and so on), shown inside the notification. It takes about 10–15 seconds and uses your Claude usage each
   time. After reading it, you can answer with OK / Cancel right away. The explanation is written in the
   display language.
+- Input boxes take several lines; Enter starts a new line. They do not take keyboard input until you click them.
+- Press **🔕** in the title row and a confirmation such as "Turn off "Permission needed" notifications?" appears;
+  OK turns off that kind of notification (the same setting as "When to notify" in the settings window, where you
+  can turn it back on). "Done" and similar notifications then close; permission, question, and plan notifications
+  stay open so you can still answer the current one.
 - Notifications appear **only after being left for about 6 seconds** (change the delay in the settings window;
   0 shows them at once). Choose "From text length" in the settings window to wait longer for longer plans and
   responses (set the reading speed in characters per minute).
@@ -66,7 +75,7 @@ The detailed specification, technical notes, the development log, and the record
 - The window **does not close by itself until you press the close button or click it** (permission
   notifications close automatically when you answer in the terminal first, or when the hook times out after
   600 seconds).
-- Clicking it shrinks it slightly and then closes it. If you click anywhere other than the close button, the app
+- Clicking it shrinks it slightly and then closes it (you can turn the animation off in the settings window). If you click anywhere other than the close button, the app
   that triggered it (the terminal or VS Code running Claude Code) is also brought to the front.
 - When several notifications appear at once, they **stack vertically instead of overlapping**. When you close
   one in the middle, the ones above move down (the newest always appears at the bottom right).
@@ -170,7 +179,8 @@ The Windows support code is included but has not been tested on a real machine.
 
 - **Settings window**: press **⚙** at the top right of a notification, or type **`/hooknotice:settings`** in
   Claude Code. You can change the display language, turn each kind of notification on or off, and change the delay
-  before notifying, the sound, the notification width, and the line length for long commands.
+  before notifying, the sound, the notification width, the line length for long commands, and the closing animation.
+  The items are split into three tabs: "When to notify", "Display", and "Sound".
   Press "Save" and the change applies from the next notification (no need to restart Claude Code). "Test
   notification" lets you check the current width.
 - Kinds of notifications and their defaults (all notifications are supported, including the 12 Notification types
@@ -210,6 +220,7 @@ The Windows support code is included but has not been tested on a real machine.
   | `delay_seconds` | 6 | 0–60 (s) | Delay before notifying. Nothing is shown if you act during this time. 0 shows it at once. When `delay_mode` is `reading`, this is the minimum delay |
   | `delay_mode` | `fixed` | `fixed` / `reading` | How to decide the delay. `fixed` uses `delay_seconds` as is. `reading` uses the length of the notification body (command, plan, question, Claude's response, etc.; whitespace and line breaks are not counted; max 120 s) |
   | `suppress_when_focused` | `false` | `true` / `false` | When `true`, nothing is shown while the app that launched Claude Code is the frontmost app (macOS only) |
+  | `click_shrink_animation` | `true` | `true` / `false` | When `false`, a notification closes at once, without the shrink animation |
   | `reading_cpm` | 600 | 100–3000 (chars/min) | Reading speed for `reading`. For example, with 600, 300 characters take 30 s |
   | `sound` | `{"enabled": true, "source": "system", "system": "Glass", "file": ""}` | — | Sound. `source` is `system` (a system sound named in `system`) or `file` (a path in `file`) |
   | `explain` | `{"model": "sonnet", "effort": "low"}` | `effort`: `low` / `medium` / `high` / `xhigh` / `max` | Model and effort used by "Explain". `model` is passed to `claude --model` as is. There is no settings window for this; edit the file. The explanation is shown as it arrives |
@@ -281,6 +292,8 @@ sample and content was compared over 12 runs per model, so treat the numbers as 
 - Run the same kind of request several times: the windows stack vertically without overlapping. Click a window
   (anywhere other than the close button): it shrinks slightly, closes, and VS Code or your terminal comes to the
   front. Notifications above it move down.
+- Write a message in the input box of a permission notification and press "Cancel": Claude receives the message.
+  Press 🔕 in the title row: a confirmation appears, and after OK that kind of notification no longer appears.
 
 ## Troubleshooting
 
